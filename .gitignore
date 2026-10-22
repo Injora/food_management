@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+!.env.example
+
+# Real registration exports contain participant PII. Keep them out of git;
+# committed examples live in samples/.
+/*.csv
