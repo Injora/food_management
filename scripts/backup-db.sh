@@ -20,6 +20,10 @@ fi
 export PGCONNECT_TIMEOUT=20
 # Neon URLs use sslmode=verify-full; check its certificate against the OS trust store.
 case "$SOURCE_DATABASE_URL" in *sslmode=verify-full*) NEON_SSL="env PGSSLROOTCERT=system" ;; *) NEON_SSL="env" ;; esac
+# pg_dump clears search_path for its session. Through Neon's pooler (transaction mode)
+# that setting stays on a shared server connection and the app then can't find its
+# tables, so always dump over the direct endpoint.
+NEON_DIRECT=${SOURCE_DATABASE_URL/-pooler./.}
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -58,13 +62,14 @@ if [ "$failover" = "supabase" ]; then
 fi
 
 $NEON_SSL pg_dump --format=custom --schema=public --no-owner --no-privileges \
-  --file="$work/live.dump" "$SOURCE_DATABASE_URL" 2>"$work/log" || fail "pg_dump"
+  --file="$work/live.dump" "$NEON_DIRECT" 2>"$work/log" || fail "pg_dump"
 
 # Rebuild the schema from scratch rather than pg_restore --clean, which errors on
 # DROP TRIGGER for tables the backup doesn't have yet. psql -1 makes it all-or-nothing.
 {
   echo "drop schema if exists public cascade;"  # the dump recreates it
   pg_restore --no-owner --no-privileges --file=- "$work/live.dump"
+  echo "reset all;"  # undo the dump's search_path before the pooler reuses this connection
 } 2>"$work/log" | psql "$BACKUP_DATABASE_URL" --single-transaction --quiet --no-psqlrc --set=ON_ERROR_STOP=1 \
   >>"$work/log" 2>&1 || fail "restore"
 lock_down

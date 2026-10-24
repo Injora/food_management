@@ -21,6 +21,10 @@ esac
 export PGCONNECT_TIMEOUT=20
 # Neon URLs use sslmode=verify-full; check its certificate against the OS trust store.
 case "$SOURCE_DATABASE_URL" in *sslmode=verify-full*) NEON_SSL="env PGSSLROOTCERT=system" ;; *) NEON_SSL="env" ;; esac
+# pg_dump clears search_path for its session. Through Neon's pooler (transaction mode)
+# that setting stays on a shared server connection and the app then can't find its
+# tables, so always dump over the direct endpoint.
+NEON_DIRECT=${SOURCE_DATABASE_URL/-pooler./.}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -31,7 +35,7 @@ if [ "$active" != "supabase" ]; then
 fi
 
 saved=~/neon-before-failback-$(date +%Y%m%d-%H%M%S).dump
-(umask 077 && $NEON_SSL pg_dump --format=custom --no-owner --no-privileges --file="$saved" "$SOURCE_DATABASE_URL")
+(umask 077 && $NEON_SSL pg_dump --format=custom --no-owner --no-privileges --file="$saved" "$NEON_DIRECT")
 echo "Saved Neon's current data to $saved"
 
 pg_dump --format=custom --schema=public --no-owner --no-privileges --file="$work/supabase.dump" "$BACKUP_DATABASE_URL"
@@ -39,7 +43,8 @@ pg_dump --format=custom --schema=public --no-owner --no-privileges --file="$work
 {
   echo "set client_min_messages = warning; drop schema if exists public cascade;"  # the dump recreates it
   pg_restore --no-owner --no-privileges --file=- "$work/supabase.dump"
-} | $NEON_SSL psql "$SOURCE_DATABASE_URL" --single-transaction --quiet --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null
+  echo "reset all;"
+} | $NEON_SSL psql "$NEON_DIRECT" --single-transaction --quiet --no-psqlrc --set=ON_ERROR_STOP=1 >/dev/null
 
 psql "$BACKUP_DATABASE_URL" --no-psqlrc --quiet -c \
   "update backup_meta.failover set active = 'neon', switched_at = now(), reason = 'Failed back by hand' where id = 1"
