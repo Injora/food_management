@@ -48,30 +48,24 @@ describe("final evaluation scoring", () => {
     id, score1: s[0], score2: s[1], score3: s[2], score4: s[3], score5: s[4], score6: s[5],
   });
 
-  it("weights six 1–10 scores 25/20/20/15/10/10 into a whole number out of 100", () => {
+  it("weights six 1–5 scores 25/20/20/15/10/10 into an exact whole number out of 100", () => {
     expect(FINAL_RUBRIC.metrics.map((m) => m.weight)).toEqual([25, 20, 20, 15, 10, 10]);
-    expect(finalScore(FINAL_RUBRIC, final("a", [10, 10, 10, 10, 10, 10]))).toBe(100);
-    expect(finalScore(FINAL_RUBRIC, final("a", [1, 1, 1, 1, 1, 1]))).toBe(10);
-    // 8×2.5 + 7×2 + 9×2 + 6×1.5 + 5 + 4 = 70
-    expect(finalScore(FINAL_RUBRIC, final("a", [8, 7, 9, 6, 5, 4]))).toBe(70);
-    // 7×2.5 + 7×1.5 = 28 with the rest at 5 → 17.5 + 10 + 10 + 10.5 + 5 + 5 = 58
-    expect(finalScore(FINAL_RUBRIC, final("a", [7, 5, 5, 7, 5, 5]))).toBe(58);
-    expect(finalScore(FINAL_RUBRIC, { ...final("a", [9, 9, 9, 9, 9, 9]), score6: null })).toBeNull();
+    expect(FINAL_RUBRIC.maxScore).toBe(5);
+    expect(finalScore(FINAL_RUBRIC, final("a", [5, 5, 5, 5, 5, 5]))).toBe(100);
+    expect(finalScore(FINAL_RUBRIC, final("a", [1, 1, 1, 1, 1, 1]))).toBe(20);
+    // 4×5 + 3×4 + 5×4 + 2×3 + 4×2 + 3×2 = 72
+    expect(finalScore(FINAL_RUBRIC, final("a", [4, 3, 5, 2, 4, 3]))).toBe(72);
+    expect(finalScore(FINAL_RUBRIC, { ...final("a", [4, 4, 4, 4, 4, 4]), score6: null })).toBeNull();
   });
 
-  it("maps two scores to each rubric level on the 1–10 scale", () => {
-    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((s) => SCORE_LABELS[levelIndex(FINAL_RUBRIC, s)])).toEqual([
-      "Poor", "Poor", "Below Average", "Below Average", "Good", "Good", "Very Good", "Very Good", "Excellent", "Excellent",
-    ]);
+  it("maps each score to its rubric level", () => {
+    expect([1, 2, 3, 4, 5].map((s) => SCORE_LABELS[levelIndex(FINAL_RUBRIC, s)])).toEqual(["Poor", "Below Average", "Good", "Very Good", "Excellent"]);
     expect([1, 2, 3, 4, 5].map((s) => levelIndex(MID_RUBRIC, s))).toEqual([0, 1, 2, 3, 4]);
   });
 
   it("separates equal totals by the heaviest metric first", () => {
-    const ranked = rankEvaluations(FINAL_RUBRIC, [final("a", [6, 8, 8, 8, 8, 8]), final("b", [8, 6, 6, 8, 8, 8])]);
-    // a: 15+16+16+12+8+8 = 75; b: 20+12+12+12+8+8 = 72 → a first despite b's higher technology score.
-    expect(ranked.map((r) => [r.id, r.final])).toEqual([["a", 75], ["b", 72]]);
-    // x: 15+14+14+10.5+7+7 = 67.5 → 68; y: 17.5+12+14+10.5+7+7 = 68. Equal, so technology decides.
-    const tied = rankEvaluations(FINAL_RUBRIC, [final("x", [6, 7, 7, 7, 7, 7]), final("y", [7, 6, 7, 7, 7, 7])]);
-    expect(tied.map((r) => [r.id, r.final, r.rank, r.tiedWith])).toEqual([["y", 68, 1, 1], ["x", 68, 2, 1]]);
+    // x: 20+16+16+12+8+8 = 80; y: 25+12+16+9+10+8 = 80. Equal, so technology decides.
+    const tied = rankEvaluations(FINAL_RUBRIC, [final("x", [4, 4, 4, 4, 4, 4]), final("y", [5, 3, 4, 3, 5, 4])]);
+    expect(tied.map((r) => [r.id, r.final, r.rank, r.tiedWith])).toEqual([["y", 80, 1, 1], ["x", 80, 2, 1]]);
   });
 });

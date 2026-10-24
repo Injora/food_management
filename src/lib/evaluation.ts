@@ -1,6 +1,6 @@
 /**
  * Hackathon judging. Each phase has its own rubric: weighted metrics scored on
- * the rubric's scale (mid 1–5, final 1–10) and added up to a whole-number
+ * the rubric's scale (1–5 in both rounds) and added up to a whole-number
  * total. Pure, shared by the server and the panel, and imported by the schema
  * (so no "@/" imports here).
  */
@@ -207,7 +207,7 @@ export const FINAL_RUBRIC: Rubric = {
       ],
     },
   ],
-  maxScore: 10,
+  maxScore: 5,
   totalMarks: 100,
   // Heaviest metric first.
   tieBreak: ["score1", "score2", "score3", "score4", "score5", "score6"],
@@ -226,7 +226,8 @@ export type Scores = Partial<Record<ScoreField, number | null>>;
 /**
  * Weighted total, rounded to a whole number, or null until every metric is
  * scored. Each point is worth weight% × totalMarks / maxScore: in the mid
- * round (20% each, out of 50, 1–5) a point is exactly 2 marks.
+ * round (20% each, out of 50) a point is 2 marks; in the final (out of 100)
+ * it is 5, 4, 4, 3, 2 and 2 marks, so both totals are exact.
  */
 export function finalScore(rubric: Rubric, scores: Scores): number | null {
   let total = 0;

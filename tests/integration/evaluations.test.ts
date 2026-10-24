@@ -41,7 +41,7 @@ describeDb("Judging and super admins (PostgreSQL)", () => {
     await expectAppError(saveEvaluation(t.db, judgeA, { phase: "final", teamId, field: "score1", value: 3 }), "NOT_FOUND");
   });
 
-  it("puts the top mid teams into the final, minus exclusions, and scores them 1–10", async () => {
+  it("puts the top mid teams into the final, minus exclusions, and scores them 1–5", async () => {
     const admin = await makeActor(t.db, "admin");
     const judge = await makeActor(t.db, "superadmin");
     const score = async (teamId: string, s: number[], track: "gemma" | "open_source" = "gemma") => {
@@ -72,11 +72,11 @@ describeDb("Judging and super admins (PostgreSQL)", () => {
     expect(final.map((r) => [r.teamName, r.track]).sort()).toEqual([["Second", "gemma"], ["Third", "gemma"], ["Top", "open_source"]]);
     expect(final.every((r) => r.score1 === null)).toBe(true);
 
-    await saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score6", value: 10 });
-    await saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score1", value: 7 });
+    await saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score6", value: 5 });
+    await saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score1", value: 4 });
     const top = (await listEvaluations(t.db, judge, "final")).find((r) => r.teamId === teams.Top)!;
-    expect([top.score1, top.score6]).toEqual([7, 10]);
-    await expectAppError(saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score2", value: 11 }), "VALIDATION");
+    expect([top.score1, top.score6]).toEqual([4, 5]);
+    await expectAppError(saveEvaluation(t.db, judge, { phase: "final", teamId: teams.Top, field: "score2", value: 6 }), "VALIDATION");
     await expectAppError(saveEvaluation(t.db, judge, { phase: "final", teamId: teams["Skip Me"], field: "score1", value: 5 }), "NOT_FOUND");
     // Mid marks are untouched and still capped at 5.
     expect((await listEvaluations(t.db, judge, "mid")).find((r) => r.teamId === teams.Top)!.score1).toBe(5);
