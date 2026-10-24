@@ -145,7 +145,7 @@ export function RoomDesk({ session }: { session: SessionId }) {
       <section className="rounded-xl border bg-card">
         <h2 className="border-b px-4 py-3 text-sm font-semibold">Teams by room</h2>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="stack-table w-full text-sm">
             <thead className="border-b bg-muted/40 text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Room</th>
@@ -161,19 +161,21 @@ export function RoomDesk({ session }: { session: SessionId }) {
                   const t = board.teams.find((x) => x.id === rt.teamId);
                   return (
                     <tr key={`${r.id}-${rt.teamId}`}>
-                      <td className="px-3 py-2 font-semibold">{r.roomNumber}</td>
-                      <td className="px-3 py-2">{rt.teamName}</td>
-                      <td className="tabular px-3 py-2">
+                      <td data-label="Room" className="px-3 py-2 font-semibold">{r.roomNumber}</td>
+                      <td data-label="Team" className="px-3 py-2">{rt.teamName}</td>
+                      <td data-label="Seated" className="tabular px-3 py-2">
                         {rt.allocated}/{rt.size}
                       </td>
-                      <td className="px-3 py-2">{t && <CheckInBadge present={t.present} size={t.size} status={t.status} compact />}</td>
+                      <td data-label="Check-in" className="px-3 py-2">{t && <CheckInBadge present={t.present} size={t.size} status={t.status} compact />}</td>
                       <td className="px-3 py-2 text-right">
+                        <div className="flex flex-wrap gap-1.5 md:justify-end">
                         <Button size="sm" variant="outline" onClick={() => setTeamId(rt.teamId)}>
                           Move / release
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => openTeam(rt.teamId, "rooms")}>
                           Details
                         </Button>
+                        </div>
                       </td>
                     </tr>
                   );

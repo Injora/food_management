@@ -6,13 +6,17 @@ import { sessions, users } from "@/db/schema";
 import { hashPassword, verifyPassword } from "./password";
 import type { Actor } from "./permissions";
 
+import type { Role } from "@/lib/domain";
+
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Judges' sessions are short: they can see and change every team's marks. */
+export const SUPERADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export async function createSession(db: Db, userId: string) {
+export async function createSession(db: Db, userId: string, role?: Role) {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const expiresAt = new Date(Date.now() + (role === "superadmin" ? SUPERADMIN_SESSION_TTL_MS : SESSION_TTL_MS));
   await db.insert(sessions).values({ userId, tokenHash: hashToken(token), expiresAt });
   // Opportunistic cleanup keeps the table small without a cron job.
   await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));

@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  smallint,
   check,
   foreignKey,
   index,
@@ -16,10 +17,13 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { COUPON_TYPES, ROLES, SESSION_IDS } from "../lib/domain";
+import { EVAL_PHASES, MAX_SCORE, MIN_SCORE, SCORE_FIELDS, TRACKS } from "../lib/evaluation";
 
 export const userRoleEnum = pgEnum("user_role", ROLES);
 export const couponTypeEnum = pgEnum("coupon_type", COUPON_TYPES);
 export const sessionIdEnum = pgEnum("event_session_id", SESSION_IDS);
+export const evalPhaseEnum = pgEnum("eval_phase", EVAL_PHASES);
+export const evalTrackEnum = pgEnum("eval_track", TRACKS);
 export const auditActionEnum = pgEnum("audit_action", [
   "csv_import",
   "team_create",
@@ -379,6 +383,105 @@ export const auditLogs = pgTable(
     index("audit_logs_created_at_idx").on(t.createdAt),
     index("audit_logs_team_id_idx").on(t.teamId),
   ],
+);
+
+// ---------------------------------------------------------------------------
+// Login throttling
+// ---------------------------------------------------------------------------
+
+/** Failed sign-ins, kept briefly to lock out password guessing per email and per client. */
+export const loginAttempts = pgTable(
+  "login_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    ip: text("ip").notNull(),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("login_attempts_email_idx").on(t.email, t.attemptedAt), index("login_attempts_ip_idx").on(t.ip, t.attemptedAt)],
+);
+
+// ---------------------------------------------------------------------------
+// Judging (super admins only)
+// ---------------------------------------------------------------------------
+
+const scoreColumn = (name: string) => smallint(name);
+
+/**
+ * One score sheet per team per phase. Scores stay null until a judge sets
+ * them; the weighted total is computed from the phase's rubric in code.
+ */
+export const teamEvaluations = pgTable(
+  "team_evaluations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    phase: evalPhaseEnum("phase").notNull(),
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "restrict" }),
+    track: evalTrackEnum("track"),
+    score1: scoreColumn("score1"),
+    score2: scoreColumn("score2"),
+    score3: scoreColumn("score3"),
+    score4: scoreColumn("score4"),
+    score5: scoreColumn("score5"),
+    ...timestamps,
+    updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [
+    unique("team_evaluations_phase_team_unique").on(t.phase, t.teamId),
+    ...SCORE_FIELDS.map((f) =>
+      check(`team_evaluations_${f}_range`, sql`${t[f]} is null or ${t[f]} between ${sql.raw(String(MIN_SCORE))} and ${sql.raw(String(MAX_SCORE))}`),
+    ),
+  ],
+);
+
+/**
+ * History of score changes. Kept apart from audit_logs, which admins can read,
+ * so marks are only ever visible to super admins.
+ */
+export const teamEvaluationChanges = pgTable(
+  "team_evaluation_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => teamEvaluations.id, { onDelete: "cascade" }),
+    field: text("field").notNull(),
+    before: text("before"),
+    after: text("after"),
+    changedAt: timestamp("changed_at", { withTimezone: true }).defaultNow().notNull(),
+    changedBy: uuid("changed_by").references(() => users.id, { onDelete: "set null" }),
+    changedByEmail: text("changed_by_email"),
+  },
+  (t) => [index("team_evaluation_changes_evaluation_idx").on(t.evaluationId, t.changedAt)],
+);
+
+/**
+ * Problem-statement form responses, shown to judges. Replaced wholesale on
+ * import; team_id is the website team the response was matched to (null when
+ * no team matched). A team may have submitted more than once.
+ */
+export const teamSubmissions = pgTable(
+  "team_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    position: integer("position").notNull(),
+    teamId: uuid("team_id").references(() => teams.id, { onDelete: "set null" }),
+    submittedAt: text("submitted_at"),
+    teamName: text("team_name").notNull(),
+    leaderName: text("leader_name"),
+    title: text("title"),
+    description: text("description"),
+    repoUrl: text("repo_url"),
+    // The organisers' check against the 20 problem statements: yes, partial or no.
+    psMatch: text("ps_match"),
+    matchedStatement: text("matched_statement"),
+    notes: text("notes"),
+    fileName: text("file_name").notNull(),
+    importedAt: timestamp("imported_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("team_submissions_team_idx").on(t.teamId), check("team_submissions_repo_https", sql`${t.repoUrl} is null or ${t.repoUrl} like 'https://%'`)],
 );
 
 export type User = typeof users.$inferSelect;

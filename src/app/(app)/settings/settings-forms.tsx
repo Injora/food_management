@@ -85,10 +85,10 @@ function UnlimitedRoomRow({ room }: { room: RoomState }) {
   return (
     <tr>
       <td className="px-3 py-2 font-semibold">{room.roomNumber}</td>
-      <td className="px-3 py-2 text-muted-foreground" colSpan={3}>
+      <td data-label="Capacity" className="px-3 py-2 text-muted-foreground" colSpan={3}>
         No limit
       </td>
-      <td className="tabular px-3 py-2">
+      <td data-label="Now" className="tabular px-3 py-2">
         {room.occupancy} people · {room.teams.length} teams
       </td>
       <td className="px-3 py-2 text-right">
@@ -115,14 +115,14 @@ function LimitedRoomRow({ room, nominalCapacity }: { room: RoomState; nominalCap
   return (
     <tr>
       <td className="px-3 py-2 font-semibold">{room.roomNumber}</td>
-      <td className="px-3 py-2">
+      <td data-label="Nominal capacity" className="px-3 py-2">
         <Input type="number" min={1} value={capacity} onChange={(e) => setCapacity(e.target.value)} className="w-24" aria-label={`Room ${room.roomNumber} capacity`} />
       </td>
-      <td className="px-3 py-2">
+      <td data-label="Tolerance" className="px-3 py-2">
         <Input type="number" min={0} max={50} value={tolerance} onChange={(e) => setTolerance(e.target.value)} className="w-20" aria-label={`Room ${room.roomNumber} tolerance`} />
       </td>
-      <td className="tabular px-3 py-2">{effectiveMax({ nominalCapacity: Number(capacity) || 0, overflowTolerance: Number(tolerance) || 0 })}</td>
-      <td className="tabular px-3 py-2">
+      <td data-label="Max permitted" className="tabular px-3 py-2">{effectiveMax({ nominalCapacity: Number(capacity) || 0, overflowTolerance: Number(tolerance) || 0 })}</td>
+      <td data-label="Now" className="tabular px-3 py-2">
         {room.occupancy}/{room.nominalCapacity}
       </td>
       <td className="px-3 py-2 text-right">
@@ -203,7 +203,7 @@ export function SettingsForms() {
             <h2 className="font-semibold">{SESSION_LABELS[id]}</h2>
             <SessionForm session={session} rooms={rooms} />
             <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full text-sm">
+              <table className="stack-table w-full text-sm">
                 <thead className="bg-muted/40 text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">Room</th>

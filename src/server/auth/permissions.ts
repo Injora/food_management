@@ -3,22 +3,28 @@ import type { Role } from "@/lib/domain";
 
 export type Actor = { id: string; email: string; name: string; role: Role };
 
-/** "organizer" accounts are the desk volunteers; admins run the event. */
+/**
+ * "organizer" accounts are the desk volunteers; admins run the event; super
+ * admins can do everything admins can, and only they can see evaluations or
+ * manage other super admins.
+ */
 const PERMISSIONS = {
-  "board:view": ["admin", "organizer"],
-  "checkin:write": ["admin", "organizer"],
+  "board:view": ["superadmin", "admin", "organizer"],
+  "checkin:write": ["superadmin", "admin", "organizer"],
   // Volunteers fix their own desk mistakes; every undo is audited.
-  "checkin:undo": ["admin", "organizer"],
-  "coupons:issue": ["admin", "organizer"],
-  "coupons:revert": ["admin"],
-  "rooms:allocate": ["admin", "organizer"],
-  "rooms:reassign": ["admin", "organizer"],
-  "rooms:configure": ["admin"],
-  "teams:view": ["admin", "organizer"],
-  "teams:edit": ["admin"],
-  "teams:import": ["admin"],
-  "reports:view": ["admin"],
-  "users:manage": ["admin"],
+  "checkin:undo": ["superadmin", "admin", "organizer"],
+  "coupons:issue": ["superadmin", "admin", "organizer"],
+  "coupons:revert": ["superadmin", "admin"],
+  "rooms:allocate": ["superadmin", "admin", "organizer"],
+  "rooms:reassign": ["superadmin", "admin", "organizer"],
+  "rooms:configure": ["superadmin", "admin"],
+  "teams:view": ["superadmin", "admin", "organizer"],
+  "teams:edit": ["superadmin", "admin"],
+  "teams:import": ["superadmin", "admin"],
+  "reports:view": ["superadmin", "admin"],
+  "users:manage": ["superadmin", "admin"],
+  "superadmins:manage": ["superadmin"],
+  "eval:score": ["superadmin"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

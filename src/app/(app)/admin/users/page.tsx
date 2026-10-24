@@ -20,7 +20,7 @@ export default async function UsersPage() {
         title="Volunteers"
         description="Volunteers can check people in, issue coupons and allocate or move rooms. Admins can also import registrations, edit teams, revert coupons, change room capacities, view reports and manage accounts."
       />
-      <UsersManager users={users} currentUserId={actor.id} />
+      <UsersManager users={users} currentUserId={actor.id} canManageSuperadmins={can(actor, "superadmins:manage")} />
     </div>
   );
 }

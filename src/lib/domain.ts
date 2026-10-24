@@ -1,8 +1,11 @@
-export const ROLES = ["admin", "organizer"] as const;
+export const ROLES = ["admin", "organizer", "superadmin"] as const;
 export type Role = (typeof ROLES)[number];
 
 /** UI names: "organizer" accounts are the volunteers working the desks. */
-export const ROLE_LABELS: Record<Role, string> = { admin: "Admin", organizer: "Volunteer" };
+export const ROLE_LABELS: Record<Role, string> = { admin: "Admin", organizer: "Volunteer", superadmin: "Super admin" };
+
+/** Super admins can do everything admins can, plus team evaluation. */
+export const isAdminRole = (role: Role) => role === "admin" || role === "superadmin";
 
 export const COUPON_TYPES = ["lunch", "snacks", "dinner"] as const;
 export type CouponType = (typeof COUPON_TYPES)[number];

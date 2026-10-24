@@ -36,17 +36,17 @@ function CouponRow({ team, meal }: { team: TeamState; meal: CouponType }) {
         </button>
         <span className="text-xs text-muted-foreground">{team.leaderName ?? "—"}</span>
       </td>
-      <td className="px-3 py-2">
+      <td data-label="Present" className="px-3 py-2">
         <CheckInBadge present={team.present} size={team.size} status={team.status} compact />
       </td>
-      <td className="px-3 py-2">
+      <td data-label={`${COUPON_LABELS[meal]} issued`} className="px-3 py-2">
         <CouponBadge issued={team.coupons[meal]} entitled={team.size} label={COUPON_LABELS[meal]} />
       </td>
       <td className="px-3 py-2">
         {left === 0 ? (
           <span className="text-sm font-semibold text-success-foreground">All issued</span>
         ) : canIssue ? (
-          <div className="flex flex-wrap justify-end gap-1.5">
+          <div className="flex flex-wrap gap-1.5 md:justify-end">
             <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void issueNext(meal)} title={next ? `Next: ${next.name}` : undefined}>
               {pending?.startsWith(`${meal}:`) && pending !== `${meal}:all` ? <LoaderCircle className="animate-spin" /> : <Plus />} 1
               {next && <span className="max-w-28 truncate font-normal text-muted-foreground">{next.name.split(" ")[0]}</span>}
@@ -114,30 +114,30 @@ export function CouponDesk() {
         ))}
       </nav>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border bg-card p-4 sm:col-span-2">
+      <section className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] gap-2 sm:grid-cols-3 sm:gap-3">
+        <div className="rounded-xl border bg-card p-3 sm:col-span-2 sm:p-4">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{COUPON_LABELS[meal]} coupons issued</p>
-          <p className="tabular mt-1 text-3xl font-semibold">
+          <p className="tabular mt-1 text-2xl font-semibold sm:text-3xl">
             {issued}
-            <span className="text-base font-normal text-muted-foreground"> / {entitled} entitled</span>
+            <span className="text-sm font-normal text-muted-foreground sm:text-base"> / {entitled}<span className="hidden sm:inline"> entitled</span></span>
           </p>
           <ProgressBar value={entitled ? issued / entitled : 0} label={`${COUPON_LABELS[meal]} coupons issued`} className="mt-2" />
         </div>
-        <div className="rounded-xl border bg-card p-4">
+        <div className="rounded-xl border bg-card p-3 sm:p-4">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Teams complete</p>
-          <p className="tabular mt-1 text-3xl font-semibold">
+          <p className="tabular mt-1 text-2xl font-semibold sm:text-3xl">
             {complete}
-            <span className="text-base font-normal text-muted-foreground"> / {board.teams.length}</span>
+            <span className="text-sm font-normal text-muted-foreground sm:text-base"> / {board.teams.length}</span>
           </p>
         </div>
       </section>
 
       <div className="flex flex-wrap gap-2">
-        <div className="relative min-w-64 flex-1">
+        <div className="relative w-full sm:w-auto sm:min-w-64 sm:flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input value={query} onChange={(e) => { setQuery(e.target.value); setPage(0); }} placeholder="Search team, leader or member…" className="h-10 pl-9" aria-label="Search teams" autoFocus />
         </div>
-        <NativeSelect value={filter} onChange={(e) => setParam("show", e.target.value)} className="w-52" aria-label="Show">
+        <NativeSelect value={filter} onChange={(e) => setParam("show", e.target.value)} className="w-full sm:w-60" aria-label="Show">
           <option value="pending">Teams with pending {COUPON_LABELS[meal].toLowerCase()}</option>
           <option value="complete">Teams fully issued</option>
           <option value="all">All teams</option>
@@ -148,7 +148,7 @@ export function CouponDesk() {
         <EmptyState icon={Ticket} title={filter === "pending" && !query ? `Every team has its ${COUPON_LABELS[meal].toLowerCase()} coupons` : "No teams match"} />
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full text-sm">
+          <table className="stack-table w-full text-sm">
             <thead className="border-b bg-muted/40 text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Team</th>

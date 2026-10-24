@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ne, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Db } from "@/db";
@@ -6,18 +6,20 @@ import { users } from "@/db/schema";
 import { AppError } from "@/lib/errors";
 import { ROLES } from "@/lib/domain";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@/server/auth/password";
-import { assertPermission, type Actor } from "@/server/auth/permissions";
+import { assertPermission, can, type Actor } from "@/server/auth/permissions";
 import { deleteUserSessions } from "@/server/auth/session";
 import { writeAudit } from "./audit";
 import { isUniqueViolation, parseInput } from "./validation";
 
 export type UserRow = { id: string; email: string; name: string; role: (typeof ROLES)[number]; active: boolean; createdAt: string };
 
+/** Super admin accounts are invisible to, and untouchable by, everyone else. */
 export async function listUsers(db: Db, actor: Actor | null): Promise<UserRow[]> {
   assertPermission(actor, "users:manage");
   const rows = await db
     .select({ id: users.id, email: users.email, name: users.name, role: users.role, active: users.active, createdAt: users.createdAt })
     .from(users)
+    .where(can(actor, "superadmins:manage") ? undefined : ne(users.role, "superadmin"))
     .orderBy(asc(users.role), asc(users.name));
   return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }));
 }
@@ -37,6 +39,7 @@ const createUserSchema = z.object({
 export async function createUser(db: Db, actor: Actor | null, raw: unknown) {
   assertPermission(actor, "users:manage");
   const input = parseInput(createUserSchema, raw);
+  if (input.role === "superadmin") assertPermission(actor, "superadmins:manage");
   try {
     return await db.transaction(async (tx) => {
       const [user] = await tx
@@ -68,16 +71,22 @@ export async function updateUser(db: Db, actor: Actor | null, raw: unknown) {
     // Serialise admin changes so two admins can't demote each other at once.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext('food-management:users'))`);
     const [user] = await tx.select().from(users).where(eq(users.id, input.userId));
-    if (!user) throw new AppError("NOT_FOUND", "User not found.");
+    // Admins can't see super admins, so to them the account doesn't exist.
+    if (!user || (user.role === "superadmin" && !can(actor, "superadmins:manage"))) throw new AppError("NOT_FOUND", "User not found.");
+    if (input.role === "superadmin") assertPermission(actor, "superadmins:manage");
 
-    const losingAdmin = user.role === "admin" && user.active && (input.role === "organizer" || input.active === false);
+    const isAdmin = (role: string) => role === "admin" || role === "superadmin";
+    const losingAdmin = isAdmin(user.role) && user.active && ((input.role !== undefined && !isAdmin(input.role)) || input.active === false);
     if (losingAdmin) {
       if (user.id === actor.id) throw new AppError("CONFLICT", "You can't remove your own admin access.");
       const [{ admins }] = await tx
         .select({ admins: count() })
         .from(users)
-        .where(and(eq(users.role, "admin"), eq(users.active, true), ne(users.id, user.id)));
+        .where(and(inArray(users.role, ["admin", "superadmin"]), eq(users.active, true), ne(users.id, user.id)));
       if (admins === 0) throw new AppError("CONFLICT", "At least one active admin is required.");
+    }
+    if (user.id === actor.id && user.role === "superadmin" && input.role !== undefined && input.role !== "superadmin") {
+      throw new AppError("CONFLICT", "You can't remove your own super admin access.");
     }
 
     const before: Record<string, unknown> = {};

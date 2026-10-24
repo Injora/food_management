@@ -23,7 +23,7 @@ const { values } = parseArgs({
 const email = (values.email ?? requireEnv("ADMIN_EMAIL")).trim().toLowerCase();
 const password = values.password ?? requireEnv("ADMIN_PASSWORD");
 const name = values.name ?? process.env.ADMIN_NAME ?? "Admin";
-const role = values.role === "organizer" ? "organizer" : "admin";
+const role = values.role === "organizer" || values.role === "superadmin" ? values.role : "admin";
 
 if (password.length < MIN_PASSWORD_LENGTH) {
   console.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);

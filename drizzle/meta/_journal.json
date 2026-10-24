@@ -36,6 +36,20 @@
       "when": 1792835012354,
       "tag": "0004_mlh_registrations",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792844278827,
+      "tag": "0005_superadmin_evaluations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792849309787,
+      "tag": "0006_team_submissions",
+      "breakpoints": true
     }
   ]
 }

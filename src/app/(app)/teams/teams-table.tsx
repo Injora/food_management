@@ -149,7 +149,7 @@ export function TeamsTable({ actions }: { actions?: React.ReactNode }) {
     <>
       <PageHeader title="Teams" description={`${board.teams.length} teams · ${participants} participants`} actions={actions} />
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative min-w-64 flex-1">
+        <div className="relative w-full sm:w-auto sm:min-w-64 sm:flex-1">
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
           <Input
             ref={searchRef}
@@ -163,21 +163,21 @@ export function TeamsTable({ actions }: { actions?: React.ReactNode }) {
             aria-label="Search teams"
           />
         </div>
-        <NativeSelect value={status} onChange={(e) => update({ status: e.target.value })} aria-label="Check-in filter" className="w-48">
+        <NativeSelect value={status} onChange={(e) => update({ status: e.target.value })} aria-label="Check-in filter" className="w-full sm:w-48">
           {Object.entries(FILTERS.status).map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </NativeSelect>
-        <NativeSelect value={room} onChange={(e) => update({ room: e.target.value })} aria-label="Room filter" className="w-52">
+        <NativeSelect value={room} onChange={(e) => update({ room: e.target.value })} aria-label="Room filter" className="w-full sm:w-52">
           {Object.entries(FILTERS.room).map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </NativeSelect>
-        <NativeSelect value={coupon} onChange={(e) => update({ coupon: e.target.value })} aria-label="Coupon filter" className="w-44">
+        <NativeSelect value={coupon} onChange={(e) => update({ coupon: e.target.value })} aria-label="Coupon filter" className="w-full sm:w-44">
           {Object.entries(FILTERS.coupon).map(([v, l]) => (
             <option key={v} value={v}>
               {l}
@@ -203,7 +203,7 @@ export function TeamsTable({ actions }: { actions?: React.ReactNode }) {
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-xl border bg-card">
-          <table className="w-full text-sm">
+          <table className="stack-table w-full text-sm">
             <thead className="border-b bg-muted/40 text-muted-foreground">
               <tr>
                 {sortHead("name", "Team name")}
@@ -225,18 +225,18 @@ export function TeamsTable({ actions }: { actions?: React.ReactNode }) {
                     </button>
                     <span className="font-mono text-xs text-muted-foreground">{t.code}</span>
                   </td>
-                  <td className="max-w-48 truncate px-3 py-2">{t.leaderName ?? <span className="text-muted-foreground">—</span>}</td>
-                  <td className="tabular px-3 py-2">{t.size}</td>
-                  <td className="px-3 py-2">
+                  <td data-label="Leader" className="max-w-48 truncate px-3 py-2">{t.leaderName ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td data-label="Size" className="tabular px-3 py-2">{t.size}</td>
+                  <td data-label="Check-in" className="px-3 py-2">
                     <CheckInBadge present={t.present} size={t.size} status={t.status} />
                   </td>
                   {COUPON_TYPES.map((c) => (
-                    <td key={c} className="px-3 py-2">
+                    <td key={c} data-label={COUPON_LABELS[c]} className="px-3 py-2">
                       <CouponBadge issued={t.coupons[c]} entitled={t.size} label={COUPON_LABELS[c]} />
                     </td>
                   ))}
                   {SESSION_IDS.map((s) => (
-                    <td key={s} className="px-3 py-2">
+                    <td key={s} data-label={s === "talks" ? "Talk room" : "Hackathon room"} className="px-3 py-2">
                       <RoomBadge room={t.rooms[s]} size={t.size} />
                     </td>
                   ))}

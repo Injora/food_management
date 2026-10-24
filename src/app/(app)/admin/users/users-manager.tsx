@@ -22,7 +22,7 @@ async function report<T>(promise: () => Promise<ActionResult<T>>, success: strin
   return res.ok;
 }
 
-export function UsersManager({ users, currentUserId }: { users: UserRow[]; currentUserId: string }) {
+export function UsersManager({ users, currentUserId, canManageSuperadmins }: { users: UserRow[]; currentUserId: string; canManageSuperadmins: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const run = async (id: string, fn: () => Promise<ActionResult<unknown>>, msg: string) => {
     setBusy(id);
@@ -33,10 +33,10 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <NewUserDialog />
+        <NewUserDialog canManageSuperadmins={canManageSuperadmins} />
       </div>
       <div className="overflow-x-auto rounded-xl border bg-card">
-        <table className="w-full min-w-[40rem] text-sm">
+        <table className="stack-table w-full min-w-[40rem] text-sm">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground uppercase">
             <tr>
               <th scope="col" className="px-4 py-2 font-medium">Name</th>
@@ -56,7 +56,7 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
                     </p>
                     <p className="text-xs text-muted-foreground">{u.email}</p>
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td data-label="Role" className="px-4 py-2.5">
                     <NativeSelect
                       aria-label={`Role for ${u.name}`}
                       className="w-36 [&_select]:h-8"
@@ -66,11 +66,12 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
                     >
                       <option value="organizer">Volunteer</option>
                       <option value="admin">Admin</option>
+                      {canManageSuperadmins && <option value="superadmin">Super admin</option>}
                     </NativeSelect>
                   </td>
-                  <td className="px-4 py-2.5">{u.active ? "Active" : "Disabled"}</td>
+                  <td data-label="Status" className="px-4 py-2.5">{u.active ? "Active" : "Disabled"}</td>
                   <td className="px-4 py-2.5">
-                    <div className="flex justify-end gap-1.5">
+                    <div className="flex gap-1.5 md:justify-end">
                       <ResetPasswordDialog user={u} />
                       {!self && (
                         <Button
@@ -97,7 +98,7 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
   );
 }
 
-function NewUserDialog() {
+function NewUserDialog({ canManageSuperadmins }: { canManageSuperadmins: boolean }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   return (
@@ -135,7 +136,8 @@ function NewUserDialog() {
             <Label htmlFor="u-role">Role</Label>
             <NativeSelect id="u-role" name="role" defaultValue="organizer">
               <option value="organizer">Volunteer: check-in, coupons, rooms</option>
-              <option value="admin">Admin: everything</option>
+              <option value="admin">Admin: everything except judging</option>
+              {canManageSuperadmins && <option value="superadmin">Super admin: everything, including judging</option>}
             </NativeSelect>
           </div>
           <div className="flex flex-col gap-1.5">

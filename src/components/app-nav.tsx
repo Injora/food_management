@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChartColumn,
+  ClipboardCheck,
   ClipboardList,
   DoorOpen,
   LayoutDashboard,
@@ -17,9 +18,9 @@ import {
 } from "lucide-react";
 import { cn } from "cn";
 
-import type { Role } from "@/lib/domain";
+import { isAdminRole, type Role } from "@/lib/domain";
 
-type Item = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; adminOnly?: boolean };
+type Item = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; adminOnly?: boolean; superadminOnly?: boolean };
 
 const SECTIONS: { title: string | null; items: Item[] }[] = [
   { title: null, items: [{ href: "/", label: "Overview", icon: LayoutDashboard }] },
@@ -43,6 +44,10 @@ const SECTIONS: { title: string | null; items: Item[] }[] = [
       { href: "/admin/users", label: "Volunteers", icon: UserCog, adminOnly: true },
     ],
   },
+  {
+    title: "Eval",
+    items: [{ href: "/eval/mid", label: "Mid evaluation", icon: ClipboardCheck, superadminOnly: true }],
+  },
 ];
 
 export function AppNav({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
@@ -52,7 +57,7 @@ export function AppNav({ role, onNavigate }: { role: Role; onNavigate?: () => vo
     <nav aria-label="Main" className="flex flex-col gap-5">
       {SECTIONS.map((section) => {
         // Hiding links is a convenience only; the server enforces permissions.
-        const items = section.items.filter((i) => !i.adminOnly || role === "admin");
+        const items = section.items.filter((i) => (!i.adminOnly || isAdminRole(role)) && (!i.superadminOnly || role === "superadmin"));
         if (items.length === 0) return null;
         return (
           <div key={section.title ?? "root"}>

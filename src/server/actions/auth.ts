@@ -1,12 +1,13 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { getDb } from "@/db";
 import { SESSION_COOKIE } from "@/server/auth/current";
 import { authenticate, createSession, deleteSession } from "@/server/auth/session";
+import { clearFailures, isLockedOut, recordFailure } from "@/server/auth/throttle";
 import { toActionError } from "@/server/action-result";
 
 export type LoginState = { error: string | null; email: string };
@@ -16,6 +17,12 @@ const loginSchema = z.object({
   password: z.string().min(1).max(200),
   next: z.string().max(500).optional(),
 });
+
+/** The client address as seen by the platform's proxy (Vercel sets x-real-ip). */
+async function clientIp() {
+  const h = await headers();
+  return (h.get("x-real-ip") ?? h.get("x-forwarded-for")?.split(",")[0] ?? "unknown").trim().slice(0, 64);
+}
 
 /** Only same-site relative paths, so `?next=` can't become an open redirect. */
 function safeNext(next: string | undefined) {
@@ -30,9 +37,18 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   let destination: string;
   try {
     const db = getDb();
+    const key = parsed.data.email.trim().toLowerCase();
+    const ip = await clientIp();
+    if (await isLockedOut(db, key, ip)) {
+      return { error: "Too many failed sign-ins. Wait 15 minutes and try again.", email };
+    }
     const actor = await authenticate(db, parsed.data.email, parsed.data.password);
-    if (!actor) return { error: "Incorrect email or password, or the account is disabled.", email };
-    const { token, expiresAt } = await createSession(db, actor.id);
+    if (!actor) {
+      await recordFailure(db, key, ip);
+      return { error: "Incorrect email or password, or the account is disabled.", email };
+    }
+    await clearFailures(db, key);
+    const { token, expiresAt } = await createSession(db, actor.id, actor.role);
     (await cookies()).set(SESSION_COOKIE, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

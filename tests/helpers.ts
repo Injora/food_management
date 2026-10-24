@@ -35,7 +35,7 @@ export function useTestDb() {
     const db = handle!.db;
     await db.execute(sql`delete from room_allocations`);
     await db.execute(sql`delete from team_room_assignments`);
-    await db.execute(sql`truncate audit_logs, check_ins, coupon_issuances, participants, teams, registration_imports, sessions, users restart identity cascade`);
+    await db.execute(sql`truncate audit_logs, check_ins, coupon_issuances, team_evaluation_changes, team_evaluations, login_attempts, participants, teams, registration_imports, sessions, users restart identity cascade`);
     await db.execute(sql`delete from rooms where room_number like 'T%'`);
     await db.execute(
       sql`update rooms set overflow_tolerance = 3, nominal_capacity = case when session_id = 'talks' then null when room_number in ('403','405','503','504','505') then 40 else 60 end`,
