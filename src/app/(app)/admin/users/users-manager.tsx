@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { callAction } from "@/lib/client-fetch";
 import type { ActionResult } from "@/lib/errors";
-import type { Role } from "@/lib/meals";
+import type { Role } from "@/lib/domain";
 import { createUserAction, updateUserAction } from "@/server/actions/users";
 import type { UserRow } from "@/server/services/users";
 
@@ -64,7 +64,7 @@ export function UsersManager({ users, currentUserId }: { users: UserRow[]; curre
                       disabled={self || busy === u.id}
                       onChange={(e) => run(u.id, () => updateUserAction({ userId: u.id, role: e.target.value as Role }), `${u.name} is now ${e.target.value}`)}
                     >
-                      <option value="organizer">Organizer</option>
+                      <option value="organizer">Volunteer</option>
                       <option value="admin">Admin</option>
                     </NativeSelect>
                   </td>
@@ -103,7 +103,7 @@ function NewUserDialog() {
   return (
     <Dialog open={open} onOpenChange={(o) => !pending && setOpen(o)}>
       <DialogTrigger render={<Button />}>
-        <Plus /> Add organizer
+        <Plus /> Add volunteer
       </DialogTrigger>
       <DialogContent>
         <form
@@ -121,7 +121,7 @@ function NewUserDialog() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Add organizer</DialogTitle>
+            <DialogTitle>Add volunteer</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-name">Name</Label>
@@ -134,7 +134,7 @@ function NewUserDialog() {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-role">Role</Label>
             <NativeSelect id="u-role" name="role" defaultValue="organizer">
-              <option value="organizer">Organizer: search and issue coupons</option>
+              <option value="organizer">Volunteer: check-in, coupons, rooms</option>
               <option value="admin">Admin: everything</option>
             </NativeSelect>
           </div>

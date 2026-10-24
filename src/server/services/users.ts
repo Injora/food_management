@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Db } from "@/db";
 import { users } from "@/db/schema";
 import { AppError } from "@/lib/errors";
-import { ROLES } from "@/lib/meals";
+import { ROLES } from "@/lib/domain";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "@/server/auth/password";
 import { assertPermission, type Actor } from "@/server/auth/permissions";
 import { deleteUserSessions } from "@/server/auth/session";

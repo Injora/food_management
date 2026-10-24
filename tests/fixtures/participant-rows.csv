@@ -1,0 +1,8 @@
+participant_id,status,full_name,email,phone,team_name,role
+R-001,registered,Asha Verma,asha@example.test,+919600000001,Neural Ninjas,leader
+R-002,registered,Bala Krishnan,bala@example.test,+919600000002,Neural Ninjas,member
+R-003,cancelled,Chitra Sen,chitra@example.test,+919600000003,Neural Ninjas,member
+R-004,registered,Dev Arora,dev@example.test,+919600000004,neural-ninjas,member
+R-005,registered,Ekta Roy,ekta@example.test,+919600000005,Code Pirates,leader
+R-006,registered,Firoz Khan,firoz@example.test,+919600000006,Code Pirates,member
+R-007,registered,,gopal@example.test,+919600000007,Code Pirates,member

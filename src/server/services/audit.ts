@@ -1,8 +1,8 @@
-import { and, count, desc, eq, type SQL } from "drizzle-orm";
+import { and, count, desc, eq, gte, type SQL } from "drizzle-orm";
 
 import type { Executor } from "@/db";
 import { auditLogs } from "@/db/schema";
-import type { MealType } from "@/lib/meals";
+import type { CouponType, SessionId } from "@/lib/domain";
 import { assertPermission, type Actor } from "@/server/auth/permissions";
 
 type AuditEntry = Omit<typeof auditLogs.$inferInsert, "id" | "createdAt" | "actorId" | "actorEmail">;
@@ -25,7 +25,8 @@ export type AuditRow = {
   action: (typeof auditLogs.$inferSelect)["action"];
   teamId: string | null;
   teamLabel: string | null;
-  mealType: MealType | null;
+  couponType: CouponType | null;
+  sessionId: SessionId | null;
   reason: string | null;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
@@ -35,11 +36,14 @@ export type AuditRow = {
 export async function listAudit(
   exec: Executor,
   actor: Actor | null,
-  opts: { teamId?: string; limit?: number; offset?: number } = {},
+  opts: { teamId?: string; limit?: number; offset?: number; since?: Date } = {},
 ): Promise<{ rows: AuditRow[]; total: number }> {
   // A team's own history is visible to organizers; the full log is admin-only.
   assertPermission(actor, opts.teamId ? "teams:view" : "reports:view");
-  const where: SQL | undefined = opts.teamId ? and(eq(auditLogs.teamId, opts.teamId)) : undefined;
+  const where: SQL | undefined = and(
+    opts.teamId ? eq(auditLogs.teamId, opts.teamId) : undefined,
+    opts.since ? gte(auditLogs.createdAt, opts.since) : undefined,
+  );
   const [rows, [{ total }]] = await Promise.all([
     exec
       .select()
@@ -59,11 +63,32 @@ export async function listAudit(
       action: r.action,
       teamId: r.teamId,
       teamLabel: r.teamLabel,
-      mealType: r.mealType,
+      couponType: r.couponType,
+      sessionId: r.sessionId,
       reason: r.reason,
       before: r.before ?? null,
       after: r.after ?? null,
       details: r.details ?? null,
     })),
   };
+}
+
+/** Latest desk activity for the overview screen (visible to volunteers). */
+export async function listRecentActivity(exec: Executor, actor: Actor | null, limit = 12): Promise<AuditRow[]> {
+  assertPermission(actor, "board:view");
+  const rows = await exec.select().from(auditLogs).orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)).limit(Math.min(limit, 50));
+  return rows.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt.toISOString(),
+    actorEmail: r.actorEmail,
+    action: r.action,
+    teamId: r.teamId,
+    teamLabel: r.teamLabel,
+    couponType: r.couponType,
+    sessionId: r.sessionId,
+    reason: r.reason,
+    before: r.before ?? null,
+    after: r.after ?? null,
+    details: r.details ?? null,
+  }));
 }

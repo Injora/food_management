@@ -1,0 +1,11 @@
+Team Name,Member Count,Registered Members,Team Leader Name,Team Leader Email,College / Company,Member 2 Name,Member 2 Email,Member 2 Phone,Member 3 Name,Member 3 Email,Member 3 Phone,Member 4 Name,Member 4 Email,Member 4 Phone
+Byte Builders,4,4,Aarav Shah,aarav@example.test,Test University,Diya Rao,diya@example.test,+919800000001,Rohan Iyer,rohan@example.test,+919800000002,Isha Nair,isha@example.test,+919800000003
+Solo Coder,1,1,Kabir Das,kabir@example.test,Test College,,,,,,,,,
+(no team name given),1,1,Meera Pillai,meera@example.test,Test College,,,,,,,,,
+Three Of Us,4,4,Nikhil Jain,nikhil@example.test,Test University,Tara Bose,tara@example.test,+919800000010,Varun Menon,varun@example.test,+919800000011,,,
+Byte Builders,4,4,Aarav Shah,aarav@example.test,Test University,Diya Rao,diya@example.test,+919800000001,Rohan Iyer,rohan@example.test,+919800000002,Isha Nair,isha@example.test,+919800000003
+Same Name,2,2,Leader One,one@example.test,College A,Partner One,p1@example.test,+919800000020,,,,,,
+Same Name,2,2,Leader Two,two@example.test,College B,Partner Two,p2@example.test,+919800000021,,,,,,
+Shared Person,2,2,Zoya Khan,zoya@example.test,College C,Diya Rao,diya@example.test,+919800000001,,,,,,
+,,,,,,,,,,,,,,
+Ghost Team,3,3,,,,,,,,,,,,

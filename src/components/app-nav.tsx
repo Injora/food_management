@@ -2,27 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChartColumn, LayoutDashboard, Upload, UserCog, Users } from "lucide-react";
+import {
+  ChartColumn,
+  DoorOpen,
+  LayoutDashboard,
+  Mic,
+  Settings,
+  Ticket,
+  Upload,
+  UserCheck,
+  UserCog,
+  Users,
+} from "lucide-react";
 import { cn } from "cn";
 
-import { MEAL_ICONS } from "@/components/meal-icon";
-import { MEAL_LABELS, MEAL_TYPES, type Role } from "@/lib/meals";
+import type { Role } from "@/lib/domain";
 
 type Item = { href: string; label: string; icon: React.ComponentType<{ className?: string }>; adminOnly?: boolean };
 
 const SECTIONS: { title: string | null; items: Item[] }[] = [
-  { title: null, items: [{ href: "/", label: "Dashboard", icon: LayoutDashboard }] },
+  { title: null, items: [{ href: "/", label: "Overview", icon: LayoutDashboard }] },
   {
-    title: "Distribute",
-    items: MEAL_TYPES.map((m) => ({ href: `/meals/${m}`, label: MEAL_LABELS[m], icon: MEAL_ICONS[m] })),
+    title: "Desk",
+    items: [
+      { href: "/check-in", label: "Check-in", icon: UserCheck },
+      { href: "/coupons", label: "Food coupons", icon: Ticket },
+      { href: "/rooms/talks", label: "Open-source talks", icon: Mic },
+      { href: "/rooms/hackathon", label: "Hackathon rooms", icon: DoorOpen },
+    ],
   },
   {
     title: "Manage",
     items: [
       { href: "/teams", label: "Teams", icon: Users },
-      { href: "/import", label: "CSV Import", icon: Upload, adminOnly: true },
+      { href: "/import", label: "Registration import", icon: Upload, adminOnly: true },
       { href: "/reports", label: "Reports", icon: ChartColumn, adminOnly: true },
-      { href: "/admin/users", label: "Organizers", icon: UserCog, adminOnly: true },
+      { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },
+      { href: "/admin/users", label: "Volunteers", icon: UserCog, adminOnly: true },
     ],
   },
 ];

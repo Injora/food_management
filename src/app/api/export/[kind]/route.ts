@@ -7,8 +7,7 @@ import { buildExport } from "@/server/services/exports";
 
 export async function GET(req: Request, ctx: RouteContext<"/api/export/[kind]">) {
   const { kind } = await ctx.params;
-  const meal = new URL(req.url).searchParams.get("meal");
-  const result = await runAction((db, actor) => buildExport(db, actor, kind, meal));
+  const result = await runAction((db, actor) => buildExport(db, actor, kind, new URL(req.url).searchParams));
   if (!result.ok) {
     return NextResponse.json(result, { status: HTTP_STATUS[result.error.code], headers: { "Cache-Control": "no-store" } });
   }

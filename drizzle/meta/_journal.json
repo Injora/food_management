@@ -15,6 +15,20 @@
       "when": 1792644203805,
       "tag": "0001_seed_meals",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792817036627,
+      "tag": "0002_participants_rooms",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792819717279,
+      "tag": "0003_talk_rooms_unlimited",
+      "breakpoints": true
     }
   ]
 }

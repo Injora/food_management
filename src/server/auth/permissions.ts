@@ -1,12 +1,19 @@
 import { AppError } from "@/lib/errors";
-import type { Role } from "@/lib/meals";
+import type { Role } from "@/lib/domain";
 
 export type Actor = { id: string; email: string; name: string; role: Role };
 
+/** "organizer" accounts are the desk volunteers; admins run the event. */
 const PERMISSIONS = {
-  "distribution:view": ["admin", "organizer"],
-  "distribution:issue": ["admin", "organizer"],
-  "distribution:correct": ["admin"],
+  "board:view": ["admin", "organizer"],
+  "checkin:write": ["admin", "organizer"],
+  // Volunteers fix their own desk mistakes; every undo is audited.
+  "checkin:undo": ["admin", "organizer"],
+  "coupons:issue": ["admin", "organizer"],
+  "coupons:revert": ["admin"],
+  "rooms:allocate": ["admin", "organizer"],
+  "rooms:reassign": ["admin", "organizer"],
+  "rooms:configure": ["admin"],
   "teams:view": ["admin", "organizer"],
   "teams:edit": ["admin"],
   "teams:import": ["admin"],

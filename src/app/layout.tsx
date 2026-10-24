@@ -8,8 +8,8 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: { default: "Food Desk", template: "%s · Food Desk" },
-  description: "Meal coupon distribution for hackathon organizers",
+  title: { default: "Hack Day Ops", template: "%s · Hack Day Ops" },
+  description: "Registration, check-in, food coupons and room allocation for hackathon volunteers",
   robots: { index: false, follow: false },
 };
 

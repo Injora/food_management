@@ -1,0 +1,8 @@
+# Never upload secrets or registration files (personal data) with the source.
+.env*
+!.env.example
+/*.csv
+/*.xlsx
+.next
+node_modules
+tsconfig.tsbuildinfo

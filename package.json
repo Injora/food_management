@@ -1,5 +1,5 @@
 {
-  "name": "food_management",
+  "name": "hack-day-ops",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -16,7 +16,8 @@
     "db:setup": "pnpm db:migrate && pnpm db:seed",
     "db:studio": "drizzle-kit studio",
     "user:create": "tsx scripts/create-user.mts",
-    "db:seed:sample": "tsx scripts/seed.mts --sample"
+    "import:check": "tsx scripts/check-registration.mts",
+    "import:registrations": "tsx scripts/import-registrations.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -31,6 +32,7 @@
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "read-excel-file": "^9.3.12",
     "server-only": "^0.0.1",
     "shadcn": "^4.22.1",
     "sonner": "^2.0.8",

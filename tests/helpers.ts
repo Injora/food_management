@@ -1,16 +1,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "dotenv";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import Papa from "papaparse";
 import { afterAll, beforeEach, describe, expect } from "vitest";
 
 import { createDb, type Db } from "@/db";
-import { users } from "@/db/schema";
+import { rooms, users } from "@/db/schema";
+import type { Role, SessionId } from "@/lib/domain";
 import { AppError, type ErrorCode } from "@/lib/errors";
-import type { ImportOptionsInput, ParsedTable } from "@/lib/csv-import";
-import type { Role } from "@/lib/meals";
 import type { Actor } from "@/server/auth/permissions";
+import { loadBoard } from "@/server/services/board";
+import { createTeam } from "@/server/services/teams";
 
 config({ path: [".env.local", ".env"], quiet: true });
 
@@ -19,18 +20,26 @@ export const TEST_DB_URL = process.env.TEST_DATABASE_URL;
 /** Integration suites run only against a real PostgreSQL database. */
 export const describeDb = TEST_DB_URL ? describe : describe.skip;
 
-export function parseCsv(text: string): ParsedTable {
-  const [headers, ...rows] = Papa.parse<string[]>(text.trim(), { skipEmptyLines: "greedy" }).data;
-  return { headers, rows };
-}
+export const parseRows = (text: string) => Papa.parse<string[]>(text, { skipEmptyLines: false }).data.filter((r, i, all) => i < all.length - 1 || r.some((c) => c !== ""));
+export const readFixture = (name: string) => fs.readFileSync(path.join("tests", "fixtures", name), "utf8");
 
-export const readSample = (name: string) => parseCsv(fs.readFileSync(path.join("samples", name), "utf8"));
-
-/** Opens a pool for the suite and truncates all data before each test. */
+/**
+ * Opens a pool for the suite and resets operational data before each test.
+ * Rooms and sessions are reference data from the migration: occupancy is reset
+ * by deleting allocations (the trigger keeps it in sync) and capacities are
+ * restored to the published schedule.
+ */
 export function useTestDb() {
-  const handle = TEST_DB_URL ? createDb(TEST_DB_URL, 12) : null;
+  const handle = TEST_DB_URL ? createDb(TEST_DB_URL, 20) : null;
   beforeEach(async () => {
-    await handle!.db.execute(sql`truncate audit_logs, distributions, teams, sessions, users restart identity cascade`);
+    const db = handle!.db;
+    await db.execute(sql`delete from room_allocations`);
+    await db.execute(sql`delete from team_room_assignments`);
+    await db.execute(sql`truncate audit_logs, check_ins, coupon_issuances, participants, teams, registration_imports, sessions, users restart identity cascade`);
+    await db.execute(sql`delete from rooms where room_number like 'T%'`);
+    await db.execute(
+      sql`update rooms set overflow_tolerance = 3, nominal_capacity = case when session_id = 'talks' then null when room_number in ('403','405','503','504','505') then 40 else 60 end`,
+    );
   });
   afterAll(async () => {
     await handle?.pool.end();
@@ -59,22 +68,26 @@ export async function expectAppError(promise: Promise<unknown>, code: ErrorCode)
   return err as AppError;
 }
 
-export const SPEC_CSV = `team_code,team_name,team_leader_name,team_leader_email,member_count
-T001,Byte Builders,Aarav,aarav@example.com,4
-T002,Neural Ninjas,Diya,diya@example.com,3
-T003,Code Pirates,Rohan,rohan@example.com,5`;
+/** Registers a team of `size` named members through the real service. */
+export async function makeTeam(db: Db, admin: Actor, name: string, size: number) {
+  const members = Array.from({ length: size }, (_, i) => ({ name: `${name} Member ${i + 1}`, email: `${name.toLowerCase().replace(/\W+/g, "")}${i + 1}@test.local` }));
+  const { teamId } = await createTeam(db, admin, { teamName: name, members, leaderIndex: 0 });
+  const board = await loadBoard(db, admin, { teamIds: [teamId] });
+  const team = board.teams[0];
+  return { teamId, memberIds: team.members.map((m) => m.id), team };
+}
 
-export const columnOptions: ImportOptionsInput = {
-  mapping: {
-    teamName: "team_name",
-    teamCode: "team_code",
-    leaderName: "team_leader_name",
-    leaderEmail: "team_leader_email",
-    memberCount: "member_count",
-    memberNameColumns: [],
-  },
-  countMode: "column",
-  rowsPerTeam: "one",
-  groupBy: "team_name",
-  maxTeamSize: 10,
-};
+export async function teamState(db: Db, actor: Actor, teamId: string) {
+  const board = await loadBoard(db, actor, { teamIds: [teamId] });
+  return board.teams[0];
+}
+
+export async function room(db: Db, session: SessionId, roomNumber: string) {
+  const [r] = await db.select().from(rooms).where(sql`${rooms.sessionId} = ${session} and ${rooms.roomNumber} = ${roomNumber}`);
+  if (!r) throw new Error(`No room ${roomNumber} in ${session}`);
+  return r;
+}
+
+export async function setRoom(db: Db, id: string, nominalCapacity: number | null, overflowTolerance = 3) {
+  await db.update(rooms).set({ nominalCapacity, overflowTolerance }).where(eq(rooms.id, id));
+}
