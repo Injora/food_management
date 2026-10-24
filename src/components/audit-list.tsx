@@ -25,6 +25,7 @@ export const AUDIT_LABELS: Record<AuditRow["action"], string> = {
   room_update: "Room settings changed",
   room_create: "Room added",
   session_update: "Session settings changed",
+  mlh_import: "MLH list uploaded",
 };
 
 const show = (v: unknown) => (v === null || v === undefined || v === "" ? "—" : String(v));

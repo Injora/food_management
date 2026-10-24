@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ChartColumn,
+  ClipboardList,
   DoorOpen,
   LayoutDashboard,
   Mic,
@@ -35,6 +36,7 @@ const SECTIONS: { title: string | null; items: Item[] }[] = [
     title: "Manage",
     items: [
       { href: "/teams", label: "Teams", icon: Users },
+      { href: "/mlh", label: "MLH registrations", icon: ClipboardList },
       { href: "/import", label: "Registration import", icon: Upload, adminOnly: true },
       { href: "/reports", label: "Reports", icon: ChartColumn, adminOnly: true },
       { href: "/settings", label: "Settings", icon: Settings, adminOnly: true },

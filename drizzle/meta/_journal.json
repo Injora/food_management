@@ -29,6 +29,13 @@
       "when": 1792819717279,
       "tag": "0003_talk_rooms_unlimited",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792835012354,
+      "tag": "0004_mlh_registrations",
+      "breakpoints": true
     }
   ]
 }

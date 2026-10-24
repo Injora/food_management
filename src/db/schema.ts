@@ -44,6 +44,7 @@ export const auditActionEnum = pgEnum("audit_action", [
   "room_update",
   "room_create",
   "session_update",
+  "mlh_import",
 ]);
 
 const timestamps = {
@@ -99,6 +100,26 @@ export const registrationImports = pgTable("registration_imports", {
   /** Validation issues shown to the organizer at import time (capped). */
   issues: jsonb("issues").$type<unknown[]>().notNull().default(sql`'[]'::jsonb`),
 });
+
+/**
+ * The latest registration list exported from the MLH portal, kept as-is for
+ * comparison with the website's participants. Replaced wholesale on upload;
+ * matching to participants happens at read time, so it never goes stale.
+ */
+export const mlhRegistrations = pgTable(
+  "mlh_registrations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    position: integer("position").notNull(),
+    fullName: text("full_name").notNull(),
+    teamName: text("team_name").notNull().default(""),
+    status: text("status").notNull(),
+    fileName: text("file_name").notNull(),
+    importedAt: timestamp("imported_at", { withTimezone: true }).defaultNow().notNull(),
+    importedBy: uuid("imported_by").references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [index("mlh_registrations_position_idx").on(t.position)],
+);
 
 export const teams = pgTable(
   "teams",

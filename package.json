@@ -17,7 +17,8 @@
     "db:studio": "drizzle-kit studio",
     "user:create": "tsx scripts/create-user.mts",
     "import:check": "tsx scripts/check-registration.mts",
-    "import:registrations": "tsx scripts/import-registrations.mts"
+    "import:registrations": "tsx scripts/import-registrations.mts",
+    "import:mlh": "tsx scripts/import-mlh.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

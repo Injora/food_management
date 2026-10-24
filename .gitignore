@@ -44,3 +44,6 @@ next-env.d.ts
 # Real registration exports contain participant PII. Keep them out of git;
 # committed examples live in samples/.
 /*.csv
+
+# Generated exports with participant names
+*.pdf
