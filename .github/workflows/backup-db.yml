@@ -1,10 +1,12 @@
 name: Back up database
 
-# Copies the live Neon database into the Supabase backup every 15 minutes.
-# GitHub may start scheduled runs a few minutes late; "Run workflow" starts one now.
+# Every 5 minutes (GitHub's minimum; scheduled runs can start a few minutes late):
+# checks that Neon answers and copies it into the Supabase backup. If Neon stops
+# answering, scripts/watch-neon.sh switches the app to Supabase and this run fails,
+# so GitHub emails you. "Run workflow" starts a run now.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,6 +20,9 @@ jobs:
   backup:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      SOURCE_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+      BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -31,8 +36,16 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-18 >/dev/null
           echo "/usr/lib/postgresql/18/bin" >> "$GITHUB_PATH"
 
+      - name: Check Neon
+        id: watch
+        run: |
+          set +e
+          scripts/watch-neon.sh
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          # 3 = already failed over: nothing to do, not an error.
+          [ "$code" -eq 0 ] || [ "$code" -eq 3 ]
+
       - name: Copy Neon to Supabase
-        env:
-          SOURCE_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
-          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+        if: steps.watch.outputs.code == '0'
         run: scripts/backup-db.sh

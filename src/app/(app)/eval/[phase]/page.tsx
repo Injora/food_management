@@ -19,6 +19,7 @@ export default async function EvaluationPage({ params }: PageProps<"/eval/[phase
   const { phase } = await params;
   // Not "forbidden": to anyone but a super admin, judging doesn't exist.
   if (!can(actor, "eval:score") || !OPEN_EVAL_PHASES.includes(phase as EvalPhase) || !RUBRICS[phase as EvalPhase]) notFound();
-  const [rows, submissions] = await Promise.all([listEvaluations(getDb(), actor, phase), listSubmissions(getDb(), actor)]);
+  const db = await getDb();
+  const [rows, submissions] = await Promise.all([listEvaluations(db, actor, phase), listSubmissions(db, actor)]);
   return <EvaluationPanel phase={phase as EvalPhase} initialRows={rows} submissions={submissions} />;
 }

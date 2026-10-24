@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Teams" };
 export default async function TeamsPage() {
   const actor = await requireActor();
   const canEdit = can(actor, "teams:edit");
-  const archived = canEdit ? await listArchivedTeams(getDb(), actor) : [];
+  const archived = canEdit ? await listArchivedTeams(await getDb(), actor) : [];
   return (
     <div className="flex flex-col gap-5">
       <Suspense>

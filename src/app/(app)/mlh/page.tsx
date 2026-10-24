@@ -9,5 +9,5 @@ export const metadata: Metadata = { title: "MLH registrations" };
 
 export default async function MlhPage() {
   const actor = await requireActor();
-  return <MlhRegistrations list={await getMlhList(getDb(), actor)} />;
+  return <MlhRegistrations list={await getMlhList(await getDb(), actor)} />;
 }

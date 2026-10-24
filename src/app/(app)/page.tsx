@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Overview" };
 
 export default async function OverviewPage() {
   const actor = await requireActor();
-  const activity = await listRecentActivity(getDb(), actor, 15);
+  const activity = await listRecentActivity(await getDb(), actor, 15);
   return (
     <>
       {/* Summary cards update from the live board; this refreshes the activity feed. */}

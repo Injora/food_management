@@ -18,6 +18,8 @@ if [ "$SOURCE_DATABASE_URL" = "$BACKUP_DATABASE_URL" ]; then
 fi
 
 export PGCONNECT_TIMEOUT=20
+# Neon URLs use sslmode=verify-full; check its certificate against the OS trust store.
+case "$SOURCE_DATABASE_URL" in *sslmode=verify-full*) NEON_SSL="env PGSSLROOTCERT=system" ;; *) NEON_SSL="env" ;; esac
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -47,8 +49,15 @@ SQL
 
 lock_down
 
-# Neon URLs use sslmode=verify-full; check its certificate against the OS trust store.
-PGSSLROOTCERT=system pg_dump --format=custom --schema=public --no-owner --no-privileges \
+# After a failover the app writes to Supabase; copying Neon over it would erase that.
+failover=$(psql "$BACKUP_DATABASE_URL" --no-psqlrc -At -c \
+  "select active from backup_meta.failover where id = 1" 2>/dev/null || true)
+if [ "$failover" = "supabase" ]; then
+  echo "Refusing to run: the app has failed over to Supabase. Run scripts/failback.sh first." >&2
+  exit 1
+fi
+
+$NEON_SSL pg_dump --format=custom --schema=public --no-owner --no-privileges \
   --file="$work/live.dump" "$SOURCE_DATABASE_URL" 2>"$work/log" || fail "pg_dump"
 
 # Rebuild the schema from scratch rather than pg_restore --clean, which errors on

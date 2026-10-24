@@ -55,7 +55,7 @@ const GROUPS: { title: string; links: [string, string][] }[] = [
 export default async function ReportsPage() {
   const actor = await requireActor();
   if (!can(actor, "reports:view")) return <Forbidden what="reports" />;
-  const db = getDb();
+  const db = await getDb();
   const [board, audit] = await Promise.all([loadBoard(db, actor), listAudit(db, actor, { limit: 100 })]);
   const s = summarize(board);
 

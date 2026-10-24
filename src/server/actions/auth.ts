@@ -36,7 +36,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
 
   let destination: string;
   try {
-    const db = getDb();
+    const db = await getDb();
     const key = parsed.data.email.trim().toLowerCase();
     const ip = await clientIp();
     if (await isLockedOut(db, key, ip)) {
@@ -68,7 +68,7 @@ export async function logout() {
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) {
     try {
-      await deleteSession(getDb(), token);
+      await deleteSession(await getDb(), token);
     } catch (err) {
       // The cookie is still cleared below; the orphaned row expires on its own.
       console.error("[auth] failed to delete session", err);

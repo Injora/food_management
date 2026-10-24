@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Volunteers" };
 export default async function UsersPage() {
   const actor = await requireActor();
   if (!can(actor, "users:manage")) return <Forbidden what="volunteer management" />;
-  const users = await listUsers(getDb(), actor);
+  const users = await listUsers(await getDb(), actor);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader

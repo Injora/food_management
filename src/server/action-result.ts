@@ -34,7 +34,7 @@ export function toActionError(err: unknown): Extract<ActionResult<never>, { ok: 
  */
 export async function runAction<T>(fn: (db: Db, actor: Actor | null) => Promise<T>): Promise<ActionResult<T>> {
   try {
-    const db = getDb();
+    const db = await getDb();
     const actor = await getActor();
     return { ok: true, data: await fn(db, actor) };
   } catch (err) {

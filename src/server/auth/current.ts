@@ -14,7 +14,7 @@ export const SESSION_COOKIE = "fm_session";
 export const getActor = cache(async (): Promise<Actor | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
-  return validateSessionToken(getDb(), token);
+  return validateSessionToken(await getDb(), token);
 });
 
 /** For pages: sends anonymous visitors to the login screen. */
