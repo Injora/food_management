@@ -49,3 +49,11 @@ jobs:
       - name: Copy Neon to Supabase
         if: steps.watch.outputs.code == '0'
         run: scripts/backup-db.sh
+
+      # A backup once left Neon's pooled connections unable to see the tables.
+      # Check the site after every run whatever happened, and repair it if needed.
+      - name: Check the site still works
+        if: always() && steps.watch.outputs.code == '0'
+        env:
+          SITE_URL: https://hackathon-ops-sepia.vercel.app
+        run: scripts/check-site.sh

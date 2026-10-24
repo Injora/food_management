@@ -24,6 +24,9 @@ case "$SOURCE_DATABASE_URL" in *sslmode=verify-full*) NEON_SSL="env PGSSLROOTCER
 # that setting stays on a shared server connection and the app then can't find its
 # tables, so always dump over the direct endpoint.
 NEON_DIRECT=${SOURCE_DATABASE_URL/-pooler./.}
+case "$NEON_DIRECT" in
+  *-pooler*) echo "Refusing to run: couldn't work out Neon's direct (non-pooled) URL." >&2; exit 1 ;;
+esac
 
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

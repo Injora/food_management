@@ -3,7 +3,9 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { createDb } from "../src/db";
 import { requireEnv } from "./env";
 
-const url = process.env.DATABASE_URL_UNPOOLED || requireEnv("DATABASE_URL");
+// Never migrate through Neon's pooler: session settings made by a migration would stick
+// to shared server connections the app reuses (see scripts/backup-db.sh).
+const url = process.env.DATABASE_URL_UNPOOLED || requireEnv("DATABASE_URL").replace("-pooler.", ".");
 const { db, pool } = createDb(url, 1);
 
 try {
