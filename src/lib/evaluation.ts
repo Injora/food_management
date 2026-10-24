@@ -1,41 +1,63 @@
 /**
- * Hackathon judging. Each phase has its own rubric: metrics scored 1–5 and
- * weighted to a whole-number total out of 50. Pure, shared by the server and
- * the panel, and imported by the schema (so no "@/" imports here).
+ * Hackathon judging. Each phase has its own rubric: weighted metrics scored on
+ * the rubric's scale (mid 1–5, final 1–10) and added up to a whole-number
+ * total. Pure, shared by the server and the panel, and imported by the schema
+ * (so no "@/" imports here).
  */
 
 export const EVAL_PHASES = ["mid", "final"] as const;
 export type EvalPhase = (typeof EVAL_PHASES)[number];
-/** Phases that are open in the panel. The final rubric is added later. */
-export const OPEN_EVAL_PHASES: readonly EvalPhase[] = ["mid"];
+/** Phases that are open in the panel. */
+export const OPEN_EVAL_PHASES: readonly EvalPhase[] = ["mid", "final"];
 export const EVAL_PHASE_LABELS: Record<EvalPhase, string> = { mid: "Mid evaluation", final: "Final evaluation" };
 
 export const TRACKS = ["gemma", "open_source"] as const;
 export type Track = (typeof TRACKS)[number];
 export const TRACK_LABELS: Record<Track, string> = { gemma: "Gemma", open_source: "Open-Source" };
 
-/** Database columns for the five scores, shared by every phase. */
-export const SCORE_FIELDS = ["score1", "score2", "score3", "score4", "score5"] as const;
+/** Database columns for the scores, shared by every phase (mid uses the first five). */
+export const SCORE_FIELDS = ["score1", "score2", "score3", "score4", "score5", "score6"] as const;
 export type ScoreField = (typeof SCORE_FIELDS)[number];
 
-/** Rubric column headings for scores 1–5. */
+/** The rubrics' five level headings, from worst to best. */
 export const SCORE_LABELS = ["Poor", "Below Average", "Good", "Very Good", "Excellent"] as const;
 
 export const MIN_SCORE = 1;
-export const MAX_SCORE = 5;
-export const TOTAL_MARKS = 50;
+/** Highest score any rubric allows; the database checks against it. */
+export const MAX_SCORE_ANY = 10;
 
 export type Metric = {
   field: ScoreField;
   label: string;
   /** Percent of the total; a rubric's weights add up to 100. */
   weight: number;
-  /** What each score from 1 to 5 means, from the rubric. */
+  /** What each of the five levels means, from the rubric. */
   levels: [string, string, string, string, string];
 };
 
+export type Rubric = {
+  metrics: Metric[];
+  /** Scores run from MIN_SCORE to this. */
+  maxScore: number;
+  /** The weighted total is out of this. */
+  totalMarks: number;
+  /** Metrics that separate equal totals, most important first. */
+  tieBreak: ScoreField[];
+  eligibility: string;
+  /** The eligibility rule in a phrase, for phones. */
+  eligibilityShort: string;
+};
+
+/**
+ * Which of the five rubric levels a score falls in. On the 1–10 scale each
+ * level covers two scores: 1–2 Poor, 3–4 Below Average … 9–10 Excellent.
+ */
+export function levelIndex(rubric: Rubric, score: number): number {
+  return Math.min(SCORE_LABELS.length, Math.ceil((score * SCORE_LABELS.length) / rubric.maxScore)) - 1;
+}
+
 /** "Hacktoberfest Hack Day: Mid Evaluation Rubric (after 5 hours)". */
-export const MID_RUBRIC: Metric[] = [
+const MID_METRICS: Metric[] = [
   {
     field: "score1",
     label: "Clarity of Idea and Scope",
@@ -98,33 +120,123 @@ export const MID_RUBRIC: Metric[] = [
   },
 ];
 
-export const RUBRICS: Partial<Record<EvalPhase, Metric[]>> = { mid: MID_RUBRIC };
+export const MID_RUBRIC: Rubric = {
+  metrics: MID_METRICS,
+  maxScore: 5,
+  totalMarks: 50,
+  // What's working, then whether the team understands it, then the rest.
+  tieBreak: ["score3", "score4", "score2", "score1", "score5"],
+  eligibility:
+    "A team not using an open-source AI or open-weight model as an important part of its project is eliminated, whatever its scores. Ask the team which open-source AI or open-weight model they are using.",
+  eligibilityShort: "no open-source AI or open-weight model at its core means the team is eliminated.",
+};
 
-export const ELIGIBILITY_RULE =
-  "A team not using an open-source AI or open-weight model as an important part of its project is eliminated, whatever its scores. Ask the team which open-source AI or open-weight model they are using.";
+/** "Hacktoberfest Hack Day: Final Evaluation Rubric (8 minutes per team)". */
+export const FINAL_RUBRIC: Rubric = {
+  metrics: [
+    {
+      field: "score1",
+      label: "Technology and Open-Source AI Use",
+      weight: 25,
+      levels: [
+        "AI is barely used or added only for show. Basic technical work.",
+        "AI is used in a minor way. Simple setup with major technical limitations.",
+        "One open-source or open-weight model does the core task. Reasonable technical choices.",
+        "Strong technical choices. The model is well integrated, with extra parts such as retrieval, validation or a well-built interface.",
+        "Sophisticated, well-justified use of open AI, with a clever technique or many parts working together. Team names the model and license and explains the choice.",
+      ],
+    },
+    {
+      field: "score2",
+      label: "Completion (Working Demo)",
+      weight: 20,
+      levels: [
+        "Mostly broken. Cannot demonstrate the main idea.",
+        "Parts work, but the demo fails or needs heavy workarounds.",
+        "Main flow works in the demo, with some gaps or rough edges.",
+        "Works end to end with only small issues. Handles a new input from the judges.",
+        "Works reliably end to end, including a live input chosen by the judges. Team achieved what it set out to build.",
+      ],
+    },
+    {
+      field: "score3",
+      label: "Idea: Clarity, Impact and Originality",
+      weight: 20,
+      levels: [
+        "Problem and user are unclear. The solution is generic.",
+        "Problem is understandable but vague. Limited usefulness or little difference from existing tools.",
+        "Clear problem and user. Some usefulness and some differentiation.",
+        "Specific, well-understood problem. Useful solution with a creative approach.",
+        "Exceptionally clear need with strong potential value. Original approach with a clear advantage over alternatives.",
+      ],
+    },
+    {
+      field: "score4",
+      label: "Understanding of Implementation",
+      weight: 15,
+      levels: [
+        "Team cannot explain how the project works or where the model is used.",
+        "Can describe the idea but not the flow. Only one member can answer.",
+        "Can explain the main flow and the model used. Most members can answer.",
+        "Explains the flow, model choice and key decisions clearly. Can point to the code where the model is used.",
+        "Every member can explain the flow, trade-offs and what did not work. Clear command of how it is built.",
+      ],
+    },
+    {
+      field: "score5",
+      label: "Design and Usability",
+      weight: 10,
+      levels: [
+        "Confusing or unusable. No thought given to the user.",
+        "Usable with effort. Layout or output is hard to read.",
+        "Usable and readable, but plain.",
+        "Clear, easy to use and designed around the user.",
+        "Intuitive and polished. A first-time user could use it without help.",
+      ],
+    },
+    {
+      field: "score6",
+      label: "Presentation and Q&A",
+      weight: 10,
+      levels: [
+        "Unclear and hard to follow. Cannot answer questions.",
+        "Understandable but disorganized. Weak answers to questions.",
+        "Clear and structured. Covers the key points within the time.",
+        "Confident and well structured. Good answers to questions.",
+        "Exceptionally clear and engaging within 4 minutes. Strong, honest answers, including about limitations.",
+      ],
+    },
+  ],
+  maxScore: 10,
+  totalMarks: 100,
+  // Heaviest metric first.
+  tieBreak: ["score1", "score2", "score3", "score4", "score5", "score6"],
+  eligibility:
+    "Pass or fail: a team must (1) use an open-source or open-weight AI model as an important part of its project and be able to name the model and its license, (2) have a working demo, and (3) have built the project at the event. Teams that do not pass are not scored.",
+  eligibilityShort: "open-source or open-weight model (named, with license), a working demo, and built at the event. Otherwise not scored.",
+};
+
+export const RUBRICS: Record<EvalPhase, Rubric> = { mid: MID_RUBRIC, final: FINAL_RUBRIC };
+
+/** Teams that go through from the mid evaluation to the final. */
+export const FINALISTS = 40;
 
 export type Scores = Partial<Record<ScoreField, number | null>>;
 
 /**
- * Weighted total out of 50, or null until every metric is scored. Each point
- * is worth weight% × 50 / 5, so with 20% weights a point is exactly 2 marks
- * and the total is always a whole number.
+ * Weighted total, rounded to a whole number, or null until every metric is
+ * scored. Each point is worth weight% × totalMarks / maxScore: in the mid
+ * round (20% each, out of 50, 1–5) a point is exactly 2 marks.
  */
-export function finalScore(rubric: Metric[], scores: Scores): number | null {
+export function finalScore(rubric: Rubric, scores: Scores): number | null {
   let total = 0;
-  for (const m of rubric) {
+  for (const m of rubric.metrics) {
     const s = scores[m.field];
     if (s == null) return null;
-    total += (s * m.weight * TOTAL_MARKS) / (MAX_SCORE * 100);
+    total += (s * m.weight * rubric.totalMarks) / (rubric.maxScore * 100);
   }
   return Math.round(total);
 }
-
-/**
- * Order used to separate equal totals, most important first: what's working,
- * then whether the team understands it, then the rest of the rubric.
- */
-export const TIE_BREAK_ORDER: ScoreField[] = ["score3", "score4", "score2", "score1", "score5"];
 
 export type Ranked<T> = T & { final: number; rank: number; tiedWith: number };
 
@@ -133,13 +245,13 @@ export type Ranked<T> = T & { final: number; rank: number; tiedWith: number };
  * equal on everything share a rank, and `tiedWith` counts the others sharing
  * their total so the panel can flag ties for the judges to resolve.
  */
-export function rankEvaluations<T extends Scores>(rubric: Metric[], entries: T[]): Ranked<T>[] {
+export function rankEvaluations<T extends Scores>(rubric: Rubric, entries: T[]): Ranked<T>[] {
   const scored = entries
     .map((e) => ({ e, final: finalScore(rubric, e) }))
     .filter((x): x is { e: T; final: number } => x.final !== null);
   const compare = (a: { e: T; final: number }, b: { e: T; final: number }) => {
     if (b.final !== a.final) return b.final - a.final;
-    for (const f of TIE_BREAK_ORDER) {
+    for (const f of rubric.tieBreak) {
       const d = (b.e[f] ?? 0) - (a.e[f] ?? 0);
       if (d !== 0) return d;
     }

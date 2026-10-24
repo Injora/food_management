@@ -11,6 +11,7 @@ import {
   Mic,
   Settings,
   Ticket,
+  Trophy,
   Upload,
   UserCheck,
   UserCog,
@@ -46,7 +47,10 @@ const SECTIONS: { title: string | null; items: Item[] }[] = [
   },
   {
     title: "Eval",
-    items: [{ href: "/eval/mid", label: "Mid evaluation", icon: ClipboardCheck, superadminOnly: true }],
+    items: [
+      { href: "/eval/mid", label: "Mid evaluation", icon: ClipboardCheck, superadminOnly: true },
+      { href: "/eval/final", label: "Final evaluation", icon: Trophy, superadminOnly: true },
+    ],
   },
 ];
 

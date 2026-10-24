@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { COUPON_TYPES, ROLES, SESSION_IDS } from "../lib/domain";
-import { EVAL_PHASES, MAX_SCORE, MIN_SCORE, SCORE_FIELDS, TRACKS } from "../lib/evaluation";
+import { EVAL_PHASES, MAX_SCORE_ANY, MID_RUBRIC, MIN_SCORE, SCORE_FIELDS, TRACKS } from "../lib/evaluation";
 
 export const userRoleEnum = pgEnum("user_role", ROLES);
 export const couponTypeEnum = pgEnum("coupon_type", COUPON_TYPES);
@@ -425,13 +425,19 @@ export const teamEvaluations = pgTable(
     score3: scoreColumn("score3"),
     score4: scoreColumn("score4"),
     score5: scoreColumn("score5"),
+    score6: scoreColumn("score6"),
     ...timestamps,
     updatedBy: uuid("updated_by").references(() => users.id, { onDelete: "set null" }),
   },
   (t) => [
     unique("team_evaluations_phase_team_unique").on(t.phase, t.teamId),
     ...SCORE_FIELDS.map((f) =>
-      check(`team_evaluations_${f}_range`, sql`${t[f]} is null or ${t[f]} between ${sql.raw(String(MIN_SCORE))} and ${sql.raw(String(MAX_SCORE))}`),
+      check(`team_evaluations_${f}_range`, sql`${t[f]} is null or ${t[f]} between ${sql.raw(String(MIN_SCORE))} and ${sql.raw(String(MAX_SCORE_ANY))}`),
+    ),
+    // The mid round scores five metrics out of 5.
+    check(
+      "team_evaluations_mid_scale",
+      sql`${t.phase} <> 'mid' or (${t.score6} is null and greatest(${t.score1}, ${t.score2}, ${t.score3}, ${t.score4}, ${t.score5}) <= ${sql.raw(String(MID_RUBRIC.maxScore))})`,
     ),
   ],
 );

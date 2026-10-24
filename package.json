@@ -19,7 +19,8 @@
     "import:check": "tsx scripts/check-registration.mts",
     "import:registrations": "tsx scripts/import-registrations.mts",
     "import:mlh": "tsx scripts/import-mlh.mts",
-    "import:submissions": "tsx scripts/import-submissions.mts"
+    "import:submissions": "tsx scripts/import-submissions.mts",
+    "qualify:final": "tsx scripts/qualify-final.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

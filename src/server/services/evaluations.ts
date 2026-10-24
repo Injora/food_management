@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Db, Executor } from "@/db";
 import { teamEvaluationChanges, teamEvaluations, teams, users } from "@/db/schema";
 import { AppError } from "@/lib/errors";
-import { EVAL_PHASES, MAX_SCORE, MIN_SCORE, OPEN_EVAL_PHASES, SCORE_FIELDS, TRACKS, type ScoreField, type Track } from "@/lib/evaluation";
+import { EVAL_PHASES, FINALISTS, MID_RUBRIC, MIN_SCORE, OPEN_EVAL_PHASES, rankEvaluations, RUBRICS, SCORE_FIELDS, TRACKS, type ScoreField, type Track } from "@/lib/evaluation";
 import { assertPermission, type Actor } from "@/server/auth/permissions";
 import { parseInput } from "./validation";
 
@@ -23,7 +23,11 @@ export type EvaluationRow = {
 
 const phaseSchema = z.enum(EVAL_PHASES).refine((p) => OPEN_EVAL_PHASES.includes(p), "This evaluation isn't open yet.");
 
-/** Every active team with its score sheet for the phase (empty until a judge scores it). */
+/**
+ * The teams being judged in the phase with their score sheets. Mid: every
+ * active team (sheets are empty until a judge scores them). Final: only the
+ * finalists, whose sheets were created when they qualified.
+ */
 export async function listEvaluations(exec: Executor, actor: Actor | null, rawPhase: unknown): Promise<EvaluationRow[]> {
   assertPermission(actor, "eval:score");
   const phase = parseInput(phaseSchema, rawPhase);
@@ -35,10 +39,10 @@ export async function listEvaluations(exec: Executor, actor: Actor | null, rawPh
       (select count(*)::int from participants p where p.team_id = t.id and p.withdrawn_at is null) as "size",
       (select count(*)::int from check_ins c join participants p on p.id = c.participant_id
         where c.team_id = t.id and c.undone_at is null and p.withdrawn_at is null) as "present",
-      e.track, e.score1, e.score2, e.score3, e.score4, e.score5,
+      e.track, e.score1, e.score2, e.score3, e.score4, e.score5, e.score6,
       e.updated_at as "updatedAt", u.email as "updatedBy"
     from teams t
-    left join team_evaluations e on e.team_id = t.id and e.phase = ${phase}
+    ${phase === "final" ? sql`join` : sql`left join`} team_evaluations e on e.team_id = t.id and e.phase = ${phase}
     left join users u on u.id = e.updated_by
     where t.archived_at is null
     order by lower(t.team_name)`);
@@ -50,17 +54,21 @@ export async function listEvaluations(exec: Executor, actor: Actor | null, rawPh
 
 const saveSchema = z.discriminatedUnion("field", [
   z.object({ phase: phaseSchema, teamId: z.uuid("Invalid team"), field: z.literal("track"), value: z.enum(TRACKS).nullable() }),
-  z.object({
-    phase: phaseSchema,
-    teamId: z.uuid("Invalid team"),
-    field: z.enum(SCORE_FIELDS),
-    value: z
-      .number()
-      .int("Scores are whole numbers")
-      .min(MIN_SCORE, `Scores are ${MIN_SCORE} to ${MAX_SCORE}`)
-      .max(MAX_SCORE, `Scores are ${MIN_SCORE} to ${MAX_SCORE}`)
-      .nullable(),
-  }),
+  z
+    .object({
+      phase: phaseSchema,
+      teamId: z.uuid("Invalid team"),
+      field: z.enum(SCORE_FIELDS),
+      value: z.number().int("Scores are whole numbers").nullable(),
+    })
+    .superRefine(({ phase, field, value }, ctx) => {
+      const rubric = RUBRICS[phase];
+      if (!rubric.metrics.some((m) => m.field === field)) {
+        ctx.addIssue({ code: "custom", path: ["field"], message: "That metric isn't part of this evaluation." });
+      } else if (value != null && (value < MIN_SCORE || value > rubric.maxScore)) {
+        ctx.addIssue({ code: "custom", path: ["value"], message: `Scores are ${MIN_SCORE} to ${rubric.maxScore}` });
+      }
+    }),
 ]);
 
 /**
@@ -80,12 +88,16 @@ export async function saveEvaluation(db: Db, actor: Actor | null, raw: unknown) 
       .for("share");
     if (!team) throw new AppError("NOT_FOUND", "Team not found.");
 
-    await tx.insert(teamEvaluations).values({ phase: input.phase, teamId: team.id }).onConflictDoNothing();
+    // Final sheets exist only for finalists (see scripts/qualify-final.mts).
+    if (input.phase !== "final") {
+      await tx.insert(teamEvaluations).values({ phase: input.phase, teamId: team.id }).onConflictDoNothing();
+    }
     const [current] = await tx
       .select()
       .from(teamEvaluations)
       .where(and(eq(teamEvaluations.phase, input.phase), eq(teamEvaluations.teamId, team.id)))
       .for("update");
+    if (!current) throw new AppError("NOT_FOUND", "This team isn't in the final evaluation.");
 
     const before = current[input.field];
     if (before !== input.value) {
@@ -110,6 +122,7 @@ export async function saveEvaluation(db: Db, actor: Actor | null, raw: unknown) 
         score3: teamEvaluations.score3,
         score4: teamEvaluations.score4,
         score5: teamEvaluations.score5,
+        score6: teamEvaluations.score6,
         updatedAt: teamEvaluations.updatedAt,
         updatedBy: users.email,
       })
@@ -117,5 +130,75 @@ export async function saveEvaluation(db: Db, actor: Actor | null, raw: unknown) 
       .leftJoin(users, eq(users.id, teamEvaluations.updatedBy))
       .where(eq(teamEvaluations.id, current.id));
     return { teamId: team.id, ...after, updatedAt: after.updatedAt.toISOString() };
+  });
+}
+
+const finalistsSchema = z.object({
+  count: z.number().int().min(1).default(FINALISTS),
+  /** Team names to leave out, matched exactly but ignoring case and spaces at the ends. */
+  exclude: z.array(z.string().trim().min(1)).default([]),
+});
+
+export type Finalist = { teamId: string; teamName: string; midRank: number; midTotal: number; track: Track | null };
+
+/**
+ * The top teams of the mid evaluation, ranked exactly as the panel ranks them,
+ * leaving out the excluded teams. Refuses if the cut-off falls inside a tie.
+ */
+export async function pickFinalists(exec: Executor, actor: Actor | null, raw: unknown): Promise<Finalist[]> {
+  assertPermission(actor, "eval:score");
+  const input = parseInput(finalistsSchema, raw);
+  const ranked = rankEvaluations(MID_RUBRIC, await listEvaluations(exec, actor, "mid"));
+
+  const excluded = new Set(input.exclude.map((n) => n.toLowerCase()));
+  for (const name of excluded) {
+    if (!ranked.some((r) => r.teamName.trim().toLowerCase() === name)) {
+      throw new AppError("NOT_FOUND", `No scored team called "${name}".`);
+    }
+  }
+  const eligible = ranked.filter((r) => !excluded.has(r.teamName.trim().toLowerCase()));
+  if (eligible.length < input.count) {
+    throw new AppError("CONFLICT", `Only ${eligible.length} teams are fully scored, fewer than ${input.count}.`);
+  }
+  const last = eligible[input.count - 1];
+  const next = eligible[input.count];
+  if (next && next.rank === last.rank) {
+    throw new AppError("CONFLICT", `${last.teamName} and ${next.teamName} tie at the cut-off; separate them in the mid evaluation first.`);
+  }
+  return eligible.slice(0, input.count).map((r) => ({ teamId: r.teamId, teamName: r.teamName, midRank: r.rank, midTotal: r.final, track: r.track }));
+}
+
+/**
+ * Creates the final-evaluation score sheets for the finalists, carrying over
+ * each team's track. Only these teams appear in, and can be scored in, the
+ * final. Runs once: refuses if any final sheet already exists.
+ */
+export async function qualifyFinalists(db: Db, actor: Actor | null, raw: unknown): Promise<Finalist[]> {
+  assertPermission(actor, "eval:score");
+  return db.transaction(async (tx) => {
+    // Serializes concurrent runs: only one can find the final empty.
+    await tx.execute(sql`lock table team_evaluations in share row exclusive mode`);
+    const [{ existing }] = (await tx.execute(sql`select count(*)::int as existing from team_evaluations where phase = 'final'`)).rows as { existing: number }[];
+    if (existing > 0) throw new AppError("CONFLICT", `The final already has ${existing} teams.`);
+
+    const finalists = await pickFinalists(tx, actor, raw);
+    const sheets = await tx
+      .insert(teamEvaluations)
+      .values(finalists.map((f) => ({ phase: "final" as const, teamId: f.teamId, track: f.track, updatedBy: actor.id })))
+      .returning({ id: teamEvaluations.id, teamId: teamEvaluations.teamId });
+    const byTeam = new Map(finalists.map((f) => [f.teamId, f]));
+    await tx.insert(teamEvaluationChanges).values(
+      sheets.map((sheet) => {
+        const f = byTeam.get(sheet.teamId)!;
+        return {
+          evaluationId: sheet.id,
+          field: "qualified",
+          after: `mid #${f.midRank}, ${f.midTotal}/${MID_RUBRIC.totalMarks}`,
+          changedBy: actor.id,
+          changedByEmail: actor.email,
+        };
+      }),
+    );
+    return finalists;
   });
 }

@@ -15,21 +15,18 @@ import { callAction } from "@/lib/client-fetch";
 import { toCsv } from "@/lib/csv";
 import type { ActionResult } from "@/lib/errors";
 import {
-  ELIGIBILITY_RULE,
   EVAL_PHASE_LABELS,
   finalScore,
-  MAX_SCORE,
+  levelIndex,
   MIN_SCORE,
   rankEvaluations,
   RUBRICS,
   SCORE_LABELS,
-  TIE_BREAK_ORDER,
-  TOTAL_MARKS,
   TRACK_LABELS,
   TRACKS,
   type EvalPhase,
-  type Metric,
   type Ranked,
+  type Rubric,
   type Track,
 } from "@/lib/evaluation";
 import type { Submission } from "@/lib/submissions";
@@ -39,7 +36,6 @@ import { PsButton } from "./ps-dialog";
 import { ScoreSheet, type Field, type Saver } from "./score-sheet";
 
 const POLL_MS = 5000;
-const SCORES = Array.from({ length: MAX_SCORE - MIN_SCORE + 1 }, (_, i) => MIN_SCORE + i);
 
 type CellKey = `${string}:${Field}`;
 
@@ -52,9 +48,15 @@ const STATUS_FILTERS = {
 } as const;
 type StatusFilter = keyof typeof STATUS_FILTERS;
 
-function sheetStatus(rubric: Metric[], r: EvaluationRow) {
-  const filled = rubric.filter((m) => r[m.field] != null).length;
-  return filled === 0 && !r.track ? "todo" : filled === rubric.length && r.track ? "done" : "partial";
+function sheetStatus(rubric: Rubric, r: EvaluationRow) {
+  const filled = rubric.metrics.filter((m) => r[m.field] != null).length;
+  return filled === 0 && !r.track ? "todo" : filled === rubric.metrics.length && r.track ? "done" : "partial";
+}
+
+/** "Very Good" for a 4 on the 1–5 scale, or "Very Good (7–8)" on the 1–10 scale. */
+function levelLabel(rubric: Rubric, level: number) {
+  const per = rubric.maxScore / SCORE_LABELS.length;
+  return per === 1 ? SCORE_LABELS[level] : `${SCORE_LABELS[level]} (${level * per + 1}–${(level + 1) * per})`;
 }
 
 function downloadCsv(name: string, rows: (string | number | null)[][]) {
@@ -64,7 +66,7 @@ function downloadCsv(name: string, rows: (string | number | null)[][]) {
   URL.revokeObjectURL(url);
 }
 
-function FinalCell({ total, rank }: { total: number | null; rank: Ranked<EvaluationRow> | undefined }) {
+function FinalCell({ total, rank, outOf }: { total: number | null; rank: Ranked<EvaluationRow> | undefined; outOf: number }) {
   if (total === null) return <span className="text-muted-foreground">—</span>;
   return (
     <>
@@ -72,7 +74,7 @@ function FinalCell({ total, rank }: { total: number | null; rank: Ranked<Evaluat
       <span className="block text-xs whitespace-nowrap text-muted-foreground">
         #{rank?.rank}
         {rank && rank.tiedWith > 0 && (
-          <Pill t="warning" className="ml-1" title={`${rank.tiedWith} other team${rank.tiedWith === 1 ? "" : "s"} have ${total}/${TOTAL_MARKS}`}>
+          <Pill t="warning" className="ml-1" title={`${rank.tiedWith} other team${rank.tiedWith === 1 ? "" : "s"} have ${total}/${outOf}`}>
             Tied
           </Pill>
         )}
@@ -91,7 +93,7 @@ function TeamCard({
   onOpen,
 }: {
   row: EvaluationRow;
-  rubric: Metric[];
+  rubric: Rubric;
   rank: Ranked<EvaluationRow> | undefined;
   submissions: Submission[];
   saving: boolean;
@@ -111,7 +113,7 @@ function TeamCard({
         </button>
         <div className="text-right">
           {saving && <LoaderCircle className="mr-1 inline size-3.5 animate-spin text-muted-foreground" aria-label="Saving" />}
-          <FinalCell total={total} rank={rank} />
+          <FinalCell total={total} rank={rank} outOf={rubric.totalMarks} />
         </div>
         <button type="button" onClick={onOpen} aria-label={`Score ${row.teamName}`} className="-mr-1 self-center rounded-md p-1 text-muted-foreground hover:bg-muted sm:hidden">
           <ChevronRight className="size-5" />
@@ -121,7 +123,7 @@ function TeamCard({
         <PsButton teamName={row.teamName} submissions={submissions} />
         {row.track ? <Pill t="neutral">{TRACK_LABELS[row.track]}</Pill> : <span className="text-xs whitespace-nowrap text-muted-foreground">No track</span>}
         <div className="ml-auto flex gap-1" aria-label="Scores">
-          {rubric.map((m) => (
+          {rubric.metrics.map((m) => (
             <span
               key={m.field}
               title={m.label}
@@ -143,7 +145,9 @@ function TeamCard({
 }
 
 export function EvaluationPanel({ phase, initialRows, submissions }: { phase: EvalPhase; initialRows: EvaluationRow[]; submissions: Submission[] }) {
-  const rubric = RUBRICS[phase]!;
+  const rubric = RUBRICS[phase];
+  const metrics = rubric.metrics;
+  const scores = useMemo(() => Array.from({ length: rubric.maxScore - MIN_SCORE + 1 }, (_, i) => MIN_SCORE + i), [rubric]);
   const [rows, setRows] = useState(initialRows);
   // Cells being saved: their local value wins over polled data until the save settles.
   const [saving, setSaving] = useState<Map<CellKey, string | number | null>>(new Map());
@@ -153,7 +157,8 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
   const [room, setRoom] = useState("all");
   const [track, setTrack] = useState("all");
   const [status, setStatus] = useState<StatusFilter>("all");
-  const [presentOnly, setPresentOnly] = useState(true);
+  // Finalists were all present at the mid evaluation; list every one of them.
+  const [presentOnly, setPresentOnly] = useState(phase === "mid");
   const [sort, setSort] = useState<"name" | "rank">("name");
 
   const submissionsByTeam = useMemo(() => {
@@ -215,7 +220,7 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
       if (total !== null && field !== "track") {
         const others = view.filter((r) => r.teamId !== row.teamId && finalScore(rubric, r) === total).map((r) => r.teamName);
         if (others.length) {
-          toast.warning(`${row.teamName} ties with ${others.slice(0, 3).join(", ")}${others.length > 3 ? ` +${others.length - 3}` : ""} at ${total}/${TOTAL_MARKS}`, {
+          toast.warning(`${row.teamName} ties with ${others.slice(0, 3).join(", ")}${others.length > 3 ? ` +${others.length - 3}` : ""} at ${total}/${rubric.totalMarks}`, {
             description: "If they really differ, adjust a metric to separate them.",
           });
         }
@@ -272,7 +277,7 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
 
   const exportCsv = () =>
     downloadCsv(`${phase}-evaluation.csv`, [
-      ["Rank", "Team", "Team code", "Leader", "Room", "Track", "Idea title", ...rubric.map((m) => `${m.label} (/${MAX_SCORE})`), `Final (/${TOTAL_MARKS})`, "Last scored by", "Last scored at"],
+      ["Rank", "Team", "Team code", "Leader", "Room", "Track", "Idea title", ...metrics.map((m) => `${m.label} (${m.weight}%, /${rubric.maxScore})`), `Final (/${rubric.totalMarks})`, "Last scored by", "Last scored at"],
       ...[...view]
         .sort((a, b) => (rankOf.get(a.teamId)?.rank ?? Infinity) - (rankOf.get(b.teamId)?.rank ?? Infinity) || a.teamName.localeCompare(b.teamName))
         .map((r) => [
@@ -283,7 +288,7 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
           r.roomNumber ?? "",
           r.track ? TRACK_LABELS[r.track] : "",
           submissionsByTeam.get(r.teamId)?.at(-1)?.title ?? "",
-          ...rubric.map((m) => r[m.field]),
+          ...metrics.map((m) => r[m.field]),
           finalScore(rubric, r),
           r.updatedBy ?? "",
           r.updatedAt ?? "",
@@ -294,7 +299,7 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
     <div className="flex flex-col gap-4 sm:gap-5">
       <PageHeader
         title={EVAL_PHASE_LABELS[phase]}
-        description={`Each metric ${MIN_SCORE}–${MAX_SCORE} · final out of ${TOTAL_MARKS}`}
+        description={`Each metric ${MIN_SCORE}–${rubric.maxScore} · final out of ${rubric.totalMarks}${phase === "final" ? ` · ${rows.length} finalists` : ""}`}
         actions={
           <Button variant="outline" onClick={exportCsv}>
             <Download /> <span className="hidden sm:inline">Download</span> CSV
@@ -322,18 +327,18 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
         <p>
           <span className="font-semibold">Eligibility rule: </span>
-          <span className="sm:hidden">no open-source AI or open-weight model at its core means the team is eliminated.</span>
-          <span className="max-sm:hidden">{ELIGIBILITY_RULE}</span>
+          <span className="sm:hidden">{rubric.eligibilityShort}</span>
+          <span className="max-sm:hidden">{rubric.eligibility}</span>
         </p>
       </div>
 
       <details className="rounded-xl border bg-card px-4 py-3 text-sm">
         <summary className="cursor-pointer font-semibold">
-          Rubric<span className="font-normal text-muted-foreground sm:hidden"> · {rubric.length} metrics, {rubric[0].weight}% each</span>
-          <span className="max-sm:hidden"> · {rubric.map((m) => `${m.label} ${m.weight}%`).join(" · ")}</span>
+          Rubric<span className="font-normal text-muted-foreground sm:hidden"> · {metrics.length} metrics</span>
+          <span className="max-sm:hidden"> · {metrics.map((m) => `${m.label} ${m.weight}%`).join(" · ")}</span>
         </summary>
         <div className="mt-3 flex flex-col gap-3 md:hidden">
-          {rubric.map((m) => (
+          {metrics.map((m) => (
             <div key={m.field}>
               <p className="font-semibold">
                 {m.label} <span className="font-normal text-muted-foreground">({m.weight}%)</span>
@@ -341,9 +346,7 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
               <ol className="mt-1 flex flex-col gap-1 text-xs text-muted-foreground">
                 {m.levels.map((l, i) => (
                   <li key={i}>
-                    <span className="font-semibold text-foreground">
-                      {i + 1} {SCORE_LABELS[i]}:
-                    </span>{" "}
+                    <span className="font-semibold text-foreground">{levelLabel(rubric, i)}:</span>{" "}
                     {l}
                   </li>
                 ))}
@@ -358,13 +361,13 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
                 <th className="py-1 pr-3 text-left font-medium">Metric</th>
                 {SCORE_LABELS.map((l, i) => (
                   <th key={l} className="px-2 py-1 text-left font-medium">
-                    {i + 1} — {l}
+                    {levelLabel(rubric, i)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y align-top">
-              {rubric.map((m) => (
+              {metrics.map((m) => (
                 <tr key={m.field}>
                   <td className="py-2 pr-3 font-semibold">
                     {m.label} <span className="font-normal text-muted-foreground">({m.weight}%)</span>
@@ -469,14 +472,16 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
                   <th className="px-3 py-2 text-left font-medium">Team leader</th>
                   <th className="px-2 py-2 text-left font-medium">PS</th>
                   <th className="px-2 py-2 text-left font-medium">Track</th>
-                  {rubric.map((m) => (
+                  {metrics.map((m) => (
                     <th key={m.field} className="px-1.5 py-2 text-left font-medium" title={`${m.label}: ${m.weight}% of the total`}>
                       <span className="block max-w-24 leading-tight">{m.label}</span>
-                      <span className="text-xs font-normal">/{MAX_SCORE}</span>
+                      <span className="text-xs font-normal">
+                        /{rubric.maxScore} · {m.weight}%
+                      </span>
                     </th>
                   ))}
                   <th className="px-3 py-2 text-right font-medium">
-                    Final <span className="text-xs font-normal">/{TOTAL_MARKS}</span>
+                    Final <span className="text-xs font-normal">/{rubric.totalMarks}</span>
                   </th>
                 </tr>
               </thead>
@@ -513,32 +518,32 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
                           ))}
                         </NativeSelect>
                       </td>
-                      {rubric.map((m) => {
+                      {metrics.map((m) => {
                         const v = r[m.field];
                         return (
                           <td key={m.field} className="px-1.5 py-2 align-top">
                             <NativeSelect
                               value={v == null ? "" : String(v)}
                               aria-label={`${m.label} for ${r.teamName}`}
-                              title={v == null ? m.label : `${v} — ${SCORE_LABELS[v - 1]}: ${m.levels[v - 1]}`}
+                              title={v == null ? m.label : `${v} — ${SCORE_LABELS[levelIndex(rubric, v)]}: ${m.levels[levelIndex(rubric, v)]}`}
                               className={cn("w-16 [&_select]:h-9 [&_select]:tabular-nums", v == null && "[&_select]:text-muted-foreground")}
                               onChange={(e) => void save(r, m.field, e.target.value ? Number(e.target.value) : null)}
                               disabled={busy(m.field)}
                             >
                               <option value="">–</option>
-                              {SCORES.map((s) => (
+                              {scores.map((s) => (
                                 <option key={s} value={s}>
                                   {s}
                                 </option>
                               ))}
                             </NativeSelect>
-                            <span className="mt-0.5 block h-4 text-[11px] leading-4 whitespace-nowrap text-muted-foreground">{v != null && SCORE_LABELS[v - 1]}</span>
+                            <span className="mt-0.5 block h-4 text-[11px] leading-4 whitespace-nowrap text-muted-foreground">{v != null && SCORE_LABELS[levelIndex(rubric, v)]}</span>
                           </td>
                         );
                       })}
                       <td className="px-3 py-2 text-right">
                         {isRowSaving(r.teamId) && <LoaderCircle className="mr-1 inline size-3.5 animate-spin text-muted-foreground" aria-label="Saving" />}
-                        <FinalCell total={finalScore(rubric, r)} rank={rankOf.get(r.teamId)} />
+                        <FinalCell total={finalScore(rubric, r)} rank={rankOf.get(r.teamId)} outOf={rubric.totalMarks} />
                       </td>
                     </tr>
                   );
@@ -549,9 +554,10 @@ export function EvaluationPanel({ phase, initialRows, submissions }: { phase: Ev
         </>
       )}
       <p className="text-xs text-muted-foreground">
-        Each metric is worth {rubric[0].weight}% (1 point = {(rubric[0].weight * TOTAL_MARKS) / (MAX_SCORE * 100)} marks). Changes save instantly and other judges see them within seconds.
-        Equal totals are ranked by {TIE_BREAK_ORDER.map((f) => rubric.find((m) => m.field === f)!.label).join(", then ")}; teams marked <em>Tied</em> share a total, so
-        adjust a metric if they really differ.
+        Each point is worth weight × {rubric.totalMarks}/{rubric.maxScore} marks ({metrics.map((m) => `${m.label} ${(m.weight * rubric.totalMarks) / (rubric.maxScore * 100)}`).join(", ")}),
+        and the total is rounded to a whole number. Changes save instantly and other judges see them within seconds. Equal totals are ranked by{" "}
+        {rubric.tieBreak.map((f) => metrics.find((m) => m.field === f)!.label).join(", then ")}; teams marked <em>Tied</em> share a total, so adjust a metric if they
+        really differ.
       </p>
 
       <ScoreSheet

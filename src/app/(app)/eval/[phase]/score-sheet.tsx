@@ -6,7 +6,7 @@ import { cn } from "cn";
 import { Pill } from "@/components/ops-badges";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { finalScore, MAX_SCORE, MIN_SCORE, SCORE_LABELS, TOTAL_MARKS, TRACK_LABELS, TRACKS, type Metric, type Ranked, type ScoreField, type Track } from "@/lib/evaluation";
+import { finalScore, levelIndex, MIN_SCORE, SCORE_LABELS, TRACK_LABELS, TRACKS, type Metric, type Ranked, type Rubric, type ScoreField, type Track } from "@/lib/evaluation";
 import type { Submission } from "@/lib/submissions";
 import type { EvaluationRow } from "@/server/services/evaluations";
 import { PsButton } from "./ps-dialog";
@@ -14,10 +14,12 @@ import { PsButton } from "./ps-dialog";
 export type Field = ScoreField | "track";
 export type Saver = (row: EvaluationRow, field: Field, value: string | number | null) => Promise<void>;
 
-const SCORES = Array.from({ length: MAX_SCORE - MIN_SCORE + 1 }, (_, i) => MIN_SCORE + i);
-
 /** Big tap targets, one per score; the chosen level's rubric text shows underneath. */
-function MetricInput({ metric, value, busy, onChange }: { metric: Metric; value: number | null; busy: boolean; onChange: (v: number | null) => void }) {
+function MetricInput({ rubric, metric, value, busy, onChange }: { rubric: Rubric; metric: Metric; value: number | null; busy: boolean; onChange: (v: number | null) => void }) {
+  const scores = Array.from({ length: rubric.maxScore - MIN_SCORE + 1 }, (_, i) => MIN_SCORE + i);
+  // On the 1–5 scale each button can carry its level name; on 1–10 the buttons are too narrow.
+  const labelled = scores.length === SCORE_LABELS.length;
+  const level = value == null ? null : levelIndex(rubric, value);
   return (
     <fieldset className="rounded-xl border p-3">
       <legend className="sr-only">{metric.label}</legend>
@@ -32,7 +34,7 @@ function MetricInput({ metric, value, busy, onChange }: { metric: Metric; value:
         )}
       </div>
       <div className="grid grid-cols-5 gap-1.5" role="radiogroup" aria-label={metric.label}>
-        {SCORES.map((s) => {
+        {scores.map((s) => {
           const active = value === s;
           return (
             <button
@@ -40,7 +42,7 @@ function MetricInput({ metric, value, busy, onChange }: { metric: Metric; value:
               type="button"
               role="radio"
               aria-checked={active}
-              aria-label={`${s}, ${SCORE_LABELS[s - 1]}`}
+              aria-label={`${s}, ${SCORE_LABELS[levelIndex(rubric, s)]}`}
               disabled={busy}
               onClick={() => onChange(s)}
               className={cn(
@@ -49,17 +51,19 @@ function MetricInput({ metric, value, busy, onChange }: { metric: Metric; value:
               )}
             >
               {s}
-              <span className={cn("hidden text-[10px] leading-none font-normal sm:block", active ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                {SCORE_LABELS[s - 1]}
-              </span>
+              {labelled && (
+                <span className={cn("hidden text-[10px] leading-none font-normal sm:block", active ? "text-primary-foreground/80" : "text-muted-foreground")}>
+                  {SCORE_LABELS[s - 1]}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
       <p className="mt-2 min-h-10 text-xs leading-relaxed text-muted-foreground">
-        {value != null ? (
+        {level != null ? (
           <>
-            <span className="font-semibold text-foreground">{SCORE_LABELS[value - 1]}:</span> {metric.levels[value - 1]}
+            <span className="font-semibold text-foreground">{SCORE_LABELS[level]}:</span> {metric.levels[level]}
           </>
         ) : (
           "Not scored yet. Tap a score; each level's rubric description appears here."
@@ -83,7 +87,7 @@ export function ScoreSheet({
 }: {
   row: EvaluationRow | null;
   rank: Ranked<EvaluationRow> | undefined;
-  rubric: Metric[];
+  rubric: Rubric;
   submissions: Submission[];
   isSaving: (field: Field) => boolean;
   onSave: Saver;
@@ -109,7 +113,7 @@ export function ScoreSheet({
                 <div className="text-right">
                   <p className="tabular text-2xl leading-none font-semibold">
                     {total ?? "—"}
-                    <span className="text-sm font-normal text-muted-foreground">/{TOTAL_MARKS}</span>
+                    <span className="text-sm font-normal text-muted-foreground">/{rubric.totalMarks}</span>
                   </p>
                   {rank && (
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -155,8 +159,8 @@ export function ScoreSheet({
               </div>
               {!row.track && <p className="-mt-1 text-xs text-muted-foreground">Choose the team&apos;s track.</p>}
 
-              {rubric.map((m) => (
-                <MetricInput key={m.field} metric={m} value={row[m.field]} busy={isSaving(m.field)} onChange={(v) => void onSave(row, m.field, v)} />
+              {rubric.metrics.map((m) => (
+                <MetricInput key={m.field} rubric={rubric} metric={m} value={row[m.field]} busy={isSaving(m.field)} onChange={(v) => void onSave(row, m.field, v)} />
               ))}
             </div>
 
