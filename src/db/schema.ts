@@ -420,6 +420,8 @@ export const teamEvaluations = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: "restrict" }),
     track: evalTrackEnum("track"),
+    // Where the team presents for this round, when it isn't their hackathon room.
+    room: text("room"),
     score1: scoreColumn("score1"),
     score2: scoreColumn("score2"),
     score3: scoreColumn("score3"),

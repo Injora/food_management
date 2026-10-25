@@ -34,8 +34,8 @@ export async function listEvaluations(exec: Executor, actor: Actor | null, rawPh
   const result = await exec.execute(sql`
     select t.id as "teamId", t.team_code as "teamCode", t.team_name as "teamName",
       (select p.name from participants p where p.team_id = t.id and p.is_leader and p.withdrawn_at is null limit 1) as "leaderName",
-      (select r.room_number from team_room_assignments a join rooms r on r.id = a.room_id
-        where a.team_id = t.id and a.session_id = 'hackathon') as "roomNumber",
+      coalesce(e.room, (select r.room_number from team_room_assignments a join rooms r on r.id = a.room_id
+        where a.team_id = t.id and a.session_id = 'hackathon')) as "roomNumber",
       (select count(*)::int from participants p where p.team_id = t.id and p.withdrawn_at is null) as "size",
       (select count(*)::int from check_ins c join participants p on p.id = c.participant_id
         where c.team_id = t.id and c.undone_at is null and p.withdrawn_at is null) as "present",

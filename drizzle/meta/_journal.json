@@ -57,6 +57,13 @@
       "when": 1792881949328,
       "tag": "0007_final_evaluation",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792894994030,
+      "tag": "0008_final_rooms",
+      "breakpoints": true
     }
   ]
 }
